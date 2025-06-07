@@ -23,7 +23,15 @@ if st.button("🔁 Rerun App"):
 def fetch_ohlcv(interval='daily', outputsize=180):
     symbol = "solana"
     vs_currency = "usd"
-    days = "max" if interval == "daily" else "30"
+
+    # Use realistic limits for free CoinGecko API (<= 365 days)
+    if interval == 'daily':
+        days = "365"
+    elif interval == 'hourly':
+        days = "30"
+    else:
+        days = "90"
+
     url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart?vs_currency={vs_currency}&days={days}&interval={interval}"
     response = requests.get(url)
 
