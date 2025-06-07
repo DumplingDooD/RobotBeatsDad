@@ -14,14 +14,14 @@ st.title("SOL/USDT Trading Dashboard")
 
 # --- FUNCTIONS ---
 @st.cache_data(ttl=3600)
-def fetch_ohlcv(interval='1day', outputsize=180):
-    api_key = "0e4cd87767fc47e9ac28cdc773b18bc5"  # Your Twelve Data API key
-    symbol = "SOLUSDT"
-    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&outputsize={outputsize}&apikey={api_key}"
+def fetch_ohlcv(interval='daily', outputsize=180):
+    symbol = "solana"
+    vs_currency = "usd"
+    days = "max" if interval == "daily" else "30"
+    url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart?vs_currency={vs_currency}&days={days}&interval={interval}"
     response = requests.get(url)
 
-    # Debug info to investigate data issue
-    st.write("📡 Twelve Data API URL:", url)
+    st.write("🌐 CoinGecko API URL:", url)
     st.write("🔄 Status Code:", response.status_code)
 
     try:
@@ -31,17 +31,23 @@ def fetch_ohlcv(interval='1day', outputsize=180):
         st.error(f"Error decoding JSON: {e}")
         return pd.DataFrame()
 
-    if response.status_code != 200 or "values" not in json_data:
-        st.error("Error fetching data from Twelve Data API.")
+    if response.status_code != 200 or "prices" not in json_data:
+        st.error("Error fetching data from CoinGecko API.")
         return pd.DataFrame()
 
-    df = pd.DataFrame(json_data["values"])
-    df.columns = [col.lower() for col in df.columns]
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    df.set_index('datetime', inplace=True)
-    df = df.sort_index()
-    df = df.astype(float)
-    return df
+    prices = json_data["prices"]
+    df = pd.DataFrame(prices, columns=["timestamp", "close"])
+    df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df.set_index("datetime", inplace=True)
+    df["close"] = df["close"].astype(float)
+
+    # For plotting, simulate open/high/low/close/volume from close prices
+    df["open"] = df["close"].shift(1).fillna(method="bfill")
+    df["high"] = df[["open", "close"]].max(axis=1)
+    df["low"] = df[["open", "close"]].min(axis=1)
+    df["volume"] = np.random.uniform(1000000, 5000000, size=len(df))  # dummy volume
+
+    return df.tail(outputsize)
 
 def add_indicators(df):
     try:
@@ -105,11 +111,11 @@ def generate_signal(df):
 
 # --- UI ---
 timeframe = st.sidebar.selectbox("Select timeframe:", options=["1h", "1d", "1w"], index=1)
-interval_map = {"1h": "1h", "1d": "1day", "1w": "1week"}
-limit = 180 if timeframe == "1h" else 90 if timeframe == "1d" else 52
+interval_map = {"1h": "hourly", "1d": "daily", "1w": "daily"}
+limit = 180 if timeframe == "1h" else 90 if timeframe == "1d" else 365
+
 df = fetch_ohlcv(interval=interval_map[timeframe], outputsize=limit)
 
-# Debugging preview
 st.write("Raw DataFrame Preview:")
 st.write(df.head())
 
@@ -117,7 +123,6 @@ if df.empty:
     st.warning(f"No data to display for {timeframe}. Try a different timeframe or check API status.")
     st.stop()
 
-# Add indicators only if data exists
 df = add_indicators(df)
 
 if df['close'].isnull().all():
