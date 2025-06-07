@@ -10,9 +10,10 @@ import mplfinance as mpf
 
 # --- CONFIG ---
 st.set_page_config(layout="wide")
-st.title("SOL/USDT Trading Dashboard")
+st.title("SOL/USDT Trading Dashboard (Using CoinGecko API)")
 
 # --- FUNCTIONS ---
+
 @st.cache_data(ttl=3600)
 def fetch_ohlcv(interval='daily', outputsize=180):
     symbol = "solana"
