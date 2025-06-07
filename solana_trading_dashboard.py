@@ -14,12 +14,14 @@ st.title("SOL/USDT Trading Dashboard")
 
 # --- FUNCTIONS ---
 @st.cache_data(ttl=3600)
-def fetch_ohlcv(interval='1d', limit=180):
-    url = f"https://api.binance.com/api/v3/klines?symbol=SOLUSDT&interval={interval}&limit={limit}"
+def fetch_ohlcv(interval='1day', outputsize=180):
+    api_key = "0e4cd87767fc47e9ac28cdc773b18bc5"  # Your Twelve Data API key
+    symbol = "SOL/USDT"
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&outputsize={outputsize}&apikey={api_key}"
     response = requests.get(url)
 
     # Debug info to investigate data issue
-    st.write("📡 Binance API URL:", url)
+    st.write("📡 Twelve Data API URL:", url)
     st.write("🔄 Status Code:", response.status_code)
 
     try:
@@ -29,19 +31,15 @@ def fetch_ohlcv(interval='1d', limit=180):
         st.error(f"Error decoding JSON: {e}")
         return pd.DataFrame()
 
-    if response.status_code != 200:
-        st.error("Error fetching data from Binance API.")
+    if response.status_code != 200 or "values" not in json_data:
+        st.error("Error fetching data from Twelve Data API.")
         return pd.DataFrame()
 
-    if not json_data:
-        st.warning("No data returned for the selected timeframe.")
-        return pd.DataFrame()
-
-    df = pd.DataFrame(json_data)
-    df = df.iloc[:, 0:6]  # Only first 6 columns
-    df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    df.set_index('timestamp', inplace=True)
+    df = pd.DataFrame(json_data["values"])
+    df.columns = [col.lower() for col in df.columns]
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df.set_index('datetime', inplace=True)
+    df = df.sort_index()
     df = df.astype(float)
     return df
 
@@ -107,23 +105,23 @@ def generate_signal(df):
 
 # --- UI ---
 timeframe = st.sidebar.selectbox("Select timeframe:", options=["1h", "1d", "1w"], index=1)
-interval_map = {"1h": "1h", "1d": "1d", "1w": "1w"}
+interval_map = {"1h": "1h", "1d": "1day", "1w": "1week"}
 limit = 180 if timeframe == "1h" else 90 if timeframe == "1d" else 52
-df = fetch_ohlcv(interval=interval_map[timeframe], limit=limit)
+df = fetch_ohlcv(interval=interval_map[timeframe], outputsize=limit)
 
 # Debugging preview
 st.write("Raw DataFrame Preview:")
 st.write(df.head())
 
 if df.empty:
-    st.warning(f"No data to display for {timeframe}. Try a different timeframe or check Binance API status.")
+    st.warning(f"No data to display for {timeframe}. Try a different timeframe or check API status.")
     st.stop()
 
 # Add indicators only if data exists
 df = add_indicators(df)
 
 if df['close'].isnull().all():
-    st.warning("All close prices are NaN — check Binance API response format.")
+    st.warning("All close prices are NaN — check API response format.")
 
 # --- CHARTS ---
 st.subheader("Candlestick Chart")
