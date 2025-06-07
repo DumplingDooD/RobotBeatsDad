@@ -12,6 +12,9 @@ import mplfinance as mpf
 st.set_page_config(layout="wide")
 st.title("SOL/USDT Trading Dashboard (Using CoinGecko API)")
 
+# --- TRIGGER RERUN ---
+st.button("🔁 Rerun App")
+
 # --- FUNCTIONS ---
 
 @st.cache_data(ttl=3600)
