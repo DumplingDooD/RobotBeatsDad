@@ -13,7 +13,9 @@ st.set_page_config(layout="wide")
 st.title("SOL/USDT Trading Dashboard (Using CoinGecko API)")
 
 # --- TRIGGER RERUN ---
-st.button("🔁 Rerun App")
+if st.button("🔁 Rerun App"):
+    st.session_state.clear()
+    st.experimental_rerun()
 
 # --- FUNCTIONS ---
 
