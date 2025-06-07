@@ -10,13 +10,13 @@ import mplfinance as mpf
 
 # --- CONFIG ---
 st.set_page_config(layout="wide")
-st.title("SOL/USDT Trading Dashboard")
+st.title("SOL/USD Trading Dashboard")
 
 # --- FUNCTIONS ---
 @st.cache_data(ttl=3600)
 def fetch_ohlcv(interval='1day', outputsize=180):
     api_key = "0e4cd87767fc47e9ac28cdc773b18bc5"  # Your Twelve Data API key
-    symbol = "SOL/USDT"
+    symbol = "SOL/USD"
     url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&outputsize={outputsize}&apikey={api_key}"
     response = requests.get(url)
 
@@ -127,7 +127,7 @@ if df['close'].isnull().all():
 st.subheader("Candlestick Chart")
 try:
     mpf_df = df[['open', 'high', 'low', 'close', 'volume']].copy()
-    mpf.plot(mpf_df, type='candle', volume=True, style='yahoo', title=f'SOL/USDT {timeframe} Candlestick Chart', mav=(9, 21), show_nontrading=False)
+    mpf.plot(mpf_df, type='candle', volume=True, style='yahoo', title=f'SOL/USD {timeframe} Candlestick Chart', mav=(9, 21), show_nontrading=False)
     st.pyplot(plt.gcf())
 except Exception as e:
     st.error(f"Error plotting candlestick chart: {e}")
