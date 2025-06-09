@@ -6,7 +6,9 @@ import datetime
 import matplotlib.pyplot as plt
 from ta.momentum import RSIIndicator, StochasticOscillator
 from ta.trend import MACD
+from ta.volatility import BollingerBands
 import mplfinance as mpf
+from textblob import TextBlob
 
 # --- CONFIG ---
 st.set_page_config(layout="wide")
@@ -25,11 +27,11 @@ def fetch_ohlcv(interval='daily', outputsize=180):
     vs_currency = "usd"
 
     if interval == 'daily':
-        days = "365"
+        days = "90"
     elif interval == 'hourly':
         days = "30"
     else:
-        days = "90"
+        days = "30"
 
     url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart?vs_currency={vs_currency}&days={days}&interval={interval}"
     response = requests.get(url)
@@ -82,6 +84,13 @@ def add_indicators(df):
     except Exception as e:
         st.error(f"Stochastic calculation error: {e}")
 
+    try:
+        bb = BollingerBands(close=df['close'])
+        df['bb_high'] = bb.bollinger_hband()
+        df['bb_low'] = bb.bollinger_lband()
+    except Exception as e:
+        st.error(f"Bollinger Bands error: {e}")
+
     return df
 
 def generate_signal(df):
@@ -111,8 +120,13 @@ def generate_signal(df):
         elif latest['Stoch_%K'] < latest['Stoch_%D'] and latest['Stoch_%K'] > 80:
             reasons.append("Stochastic RSI crossover above 80 (bearish signal)")
 
-    buy_signals = ["bullish" in r or "oversold" in r for r in reasons]
-    sell_signals = ["bearish" in r or "overbought" in r for r in reasons]
+    if 'bb_low' in df.columns and latest['close'] < latest['bb_low']:
+        reasons.append("Price below lower Bollinger Band (potential reversal)")
+    elif 'bb_high' in df.columns and latest['close'] > latest['bb_high']:
+        reasons.append("Price above upper Bollinger Band (potential top)")
+
+    buy_signals = ["bullish" in r or "oversold" in r or "reversal" in r for r in reasons]
+    sell_signals = ["bearish" in r or "overbought" in r or "top" in r for r in reasons]
 
     if sum(buy_signals) >= 2:
         signal = "Buy"
@@ -124,7 +138,7 @@ def generate_signal(df):
 # --- UI ---
 timeframe = st.sidebar.selectbox("Select timeframe:", options=["1h", "1d", "1w"], index=1)
 interval_map = {"1h": "hourly", "1d": "daily", "1w": "daily"}
-limit = 180 if timeframe == "1h" else 90 if timeframe == "1d" else 365
+limit = 180 if timeframe == "1h" else 90 if timeframe == "1d" else 30
 
 df = fetch_ohlcv(interval=interval_map[timeframe], outputsize=limit)
 
