@@ -7,10 +7,12 @@ import matplotlib.pyplot as plt
 from ta.momentum import RSIIndicator, StochasticOscillator
 from ta.trend import MACD
 import mplfinance as mpf
+from textblob import TextBlob
+import feedparser
 
 # --- CONFIG ---
 st.set_page_config(layout="wide")
-st.title("SOL/USDT Trading Dashboard (Using CoinGecko API)")
+st.title("SOL/USDT Trading Dashboard (Using CoinGecko API) with Sentiment Analysis")
 
 # --- TRIGGER RERUN ---
 if st.button("🔁 Rerun App"):
@@ -24,7 +26,6 @@ def fetch_ohlcv(interval='daily', outputsize=180):
     symbol = "solana"
     vs_currency = "usd"
 
-    # Use realistic limits for free CoinGecko API (<= 365 days)
     if interval == 'daily':
         days = "365"
     elif interval == 'hourly':
@@ -55,11 +56,10 @@ def fetch_ohlcv(interval='daily', outputsize=180):
     df.set_index("datetime", inplace=True)
     df["close"] = df["close"].astype(float)
 
-    # For plotting, simulate open/high/low/close/volume from close prices
     df["open"] = df["close"].shift(1).fillna(method="bfill")
     df["high"] = df[["open", "close"]].max(axis=1)
     df["low"] = df[["open", "close"]].min(axis=1)
-    df["volume"] = np.random.uniform(1000000, 5000000, size=len(df))  # dummy volume
+    df["volume"] = np.random.uniform(1000000, 5000000, size=len(df))
 
     return df.tail(outputsize)
 
@@ -122,6 +122,40 @@ def generate_signal(df):
         signal = "Sell"
 
     return signal, reasons
+
+def fetch_sentiment():
+    news_url = "https://api.coingecko.com/api/v3/coins/solana/status_updates"
+    response = requests.get(news_url)
+    sentiments = []
+
+    if response.status_code == 200:
+        updates = response.json().get("status_updates", [])
+        for item in updates:
+            content = item.get("description", "")
+            if content:
+                sentiment_score = TextBlob(content).sentiment.polarity
+                sentiments.append(sentiment_score)
+
+    # Additional feeds (Reddit/CryptoPanic-style)
+    feeds = [
+        "https://www.reddit.com/r/solana/.rss",
+        "https://cryptopanic.com/news/rss/category/all/sol"
+    ]
+    for feed_url in feeds:
+        try:
+            feed = feedparser.parse(feed_url)
+            for entry in feed.entries:
+                text = entry.title + " " + entry.get("summary", "")
+                score = TextBlob(text).sentiment.polarity
+                sentiments.append(score)
+        except Exception as e:
+            st.warning(f"Error fetching from {feed_url}: {e}")
+
+    if sentiments:
+        avg_sentiment = np.mean(sentiments)
+        return avg_sentiment, sentiments
+    else:
+        return 0, []
 
 # --- UI ---
 timeframe = st.sidebar.selectbox("Select timeframe:", options=["1h", "1d", "1w"], index=1)
@@ -192,3 +226,25 @@ else:
     st.write("**Reasons:**")
     for reason in reasons:
         st.markdown(f"- {reason}")
+
+    st.markdown("### 💡 Recommendation")
+    if signal == "Buy":
+        st.markdown("> Based on technical indicators, it may be a **good time to consider buying** SOL/USDT.")
+    elif signal == "Sell":
+        st.markdown("> Indicators suggest **bearish signals** — it might be time to consider **selling** or securing gains.")
+    else:
+        st.markdown("> The market currently shows no strong trend. **Holding** may be the most prudent action.")
+
+# --- SENTIMENT ANALYSIS ---
+st.subheader("Market Sentiment")
+avg_sentiment, sentiments = fetch_sentiment()
+
+if sentiments:
+    if avg_sentiment > 0.1:
+        st.success(f"📈 Sentiment Score: {avg_sentiment:.2f} — Positive market sentiment")
+    elif avg_sentiment < -0.1:
+        st.error(f"📉 Sentiment Score: {avg_sentiment:.2f} — Negative market sentiment")
+    else:
+        st.info(f"⏸ Sentiment Score: {avg_sentiment:.2f} — Neutral sentiment")
+else:
+    st.warning("No recent sentiment data available from CoinGecko, Reddit or CryptoPanic.")
