@@ -8,7 +8,6 @@ from ta.momentum import RSIIndicator, StochasticOscillator
 from ta.trend import MACD
 from ta.volatility import BollingerBands
 import mplfinance as mpf
-from textblob import TextBlob
 
 # --- CONFIG ---
 st.set_page_config(layout="wide")
@@ -167,8 +166,9 @@ if 'MACD' in df.columns:
     st.subheader("MACD")
     fig, ax = plt.subplots(figsize=(12, 3))
     ax.plot(df.index, df['MACD'], label='MACD', color='blue')
-    ax.plot(df.index, df['Signal'], label='Signal', color='orange')
-    ax.fill_between(df.index, df['MACD'] - df['Signal'], 0, color='gray', alpha=0.3)
+    if 'Signal' in df.columns:
+        ax.plot(df.index, df['Signal'], label='Signal', color='orange')
+        ax.fill_between(df.index, df['MACD'] - df['Signal'], 0, color='gray', alpha=0.3)
     ax.legend()
     st.pyplot(fig)
 
