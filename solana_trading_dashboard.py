@@ -27,8 +27,6 @@ def fetch_ohlcv(interval='daily', outputsize=180):
 
     if interval == 'daily':
         days = "30"
-    elif interval == 'hourly':
-        days = "7"
     else:
         days = "30"
 
@@ -135,9 +133,9 @@ def generate_signal(df):
     return signal, reasons
 
 # --- UI ---
-timeframe = st.sidebar.selectbox("Select timeframe:", options=["1h", "1d", "1w"], index=1)
-interval_map = {"1h": "hourly", "1d": "daily", "1w": "daily"}
-limit = 180 if timeframe == "1h" else 90 if timeframe == "1d" else 30
+timeframe = st.sidebar.selectbox("Select timeframe:", options=["1d", "1w"], index=0)
+interval_map = {"1d": "daily", "1w": "daily"}
+limit = 90 if timeframe == "1d" else 30
 
 df = fetch_ohlcv(interval=interval_map[timeframe], outputsize=limit)
 
