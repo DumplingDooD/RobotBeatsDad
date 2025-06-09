@@ -25,10 +25,7 @@ def fetch_ohlcv(interval='daily', outputsize=180):
     symbol = "solana"
     vs_currency = "usd"
 
-    if interval == 'daily':
-        days = "30"
-    else:
-        days = "30"
+    days = "30"
 
     url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart?vs_currency={vs_currency}&days={days}&interval={interval}"
     response = requests.get(url)
