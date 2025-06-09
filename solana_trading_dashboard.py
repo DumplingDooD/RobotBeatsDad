@@ -26,9 +26,9 @@ def fetch_ohlcv(interval='daily', outputsize=180):
     vs_currency = "usd"
 
     if interval == 'daily':
-        days = "90"
-    elif interval == 'hourly':
         days = "30"
+    elif interval == 'hourly':
+        days = "7"
     else:
         days = "30"
 
@@ -40,7 +40,7 @@ def fetch_ohlcv(interval='daily', outputsize=180):
 
     try:
         json_data = response.json()
-        st.write("🧾 Full JSON Response:", json_data)
+        st.write("🧎 Full JSON Response:", json_data)
     except Exception as e:
         st.error(f"Error decoding JSON: {e}")
         return pd.DataFrame()
