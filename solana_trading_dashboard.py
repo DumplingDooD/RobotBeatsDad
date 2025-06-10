@@ -50,7 +50,8 @@ def fetch_ohlcv(interval='daily', outputsize=180):
     df.set_index("datetime", inplace=True)
     df["close"] = df["close"].astype(float)
 
-    df["open"] = df["close"].shift(1).fillna(method="bfill")
+    # Replace fillna with ffill to avoid FutureWarning
+    df["open"] = df["close"].shift(1).ffill()  # Forward fill instead of bfill
     df["high"] = df[["open", "close"]].max(axis=1)
     df["low"] = df[["open", "close"]].min(axis=1)
     df["volume"] = np.random.uniform(1000000, 5000000, size=len(df))
@@ -88,7 +89,8 @@ def add_indicators(df):
     return df
 
 def summarize_trend(y_values):
-    diff = y_values[-1] - y_values[0]
+    # Use iloc to avoid position-based indexing FutureWarning
+    diff = y_values.iloc[-1] - y_values.iloc[0]
     if diff > 0:
         return f"The chart shows an upward trend with a gain of {diff} units."
     elif diff < 0:
