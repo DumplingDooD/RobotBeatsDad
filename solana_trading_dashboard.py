@@ -87,6 +87,15 @@ def add_indicators(df):
 
     return df
 
+def summarize_trend(y_values):
+    diff = y_values[-1] - y_values[0]
+    if diff > 0:
+        return f"The chart shows an upward trend with a gain of {diff} units."
+    elif diff < 0:
+        return f"The chart shows a downward trend with a loss of {abs(diff)} units."
+    else:
+        return "The chart shows a flat trend with no significant change."
+
 def generate_signal(df):
     signal = "Hold"
     reasons = []
@@ -147,6 +156,11 @@ df = add_indicators(df)
 
 if df['close'].isnull().all():
     st.warning("All close prices are NaN — check API response format.")
+
+# --- TREND SUMMARY ---
+st.subheader("Price Trend Summary")
+trend_summary = summarize_trend(df['close'])
+st.write(trend_summary)
 
 # --- CHARTS ---
 st.subheader("Candlestick Chart")
