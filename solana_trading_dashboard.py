@@ -50,11 +50,14 @@ def fetch_ohlcv(interval='daily', outputsize=180):
     df.set_index("datetime", inplace=True)
     df["close"] = df["close"].astype(float)
 
-    # Replace fillna with ffill to avoid FutureWarning
-    df["open"] = df["close"].shift(1).ffill()  # Forward fill instead of bfill
+    # Forward fill NaN values instead of using bfill
+    df["open"] = df["close"].shift(1).ffill()  
     df["high"] = df[["open", "close"]].max(axis=1)
     df["low"] = df[["open", "close"]].min(axis=1)
     df["volume"] = np.random.uniform(1000000, 5000000, size=len(df))
+
+    # Remove rows with any NaN values in key columns
+    df.dropna(subset=["close", "open", "high", "low"], inplace=True)
 
     return df.tail(outputsize)
 
