@@ -24,9 +24,7 @@ if st.button("🔁 Rerun App"):
 def fetch_ohlcv(interval='daily', outputsize=180):
     symbol = "solana"
     vs_currency = "usd"
-
     days = "30"
-
     url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart?vs_currency={vs_currency}&days={days}&interval={interval}"
     response = requests.get(url)
 
@@ -91,57 +89,59 @@ def add_indicators(df):
 
     return df
 
-def summarize_trend(y_values):
-    # Use iloc to avoid position-based indexing FutureWarning
-    diff = y_values.iloc[-1] - y_values.iloc[0]
-    if diff > 0:
-        return f"The chart shows an upward trend with a gain of {diff} units."
-    elif diff < 0:
-        return f"The chart shows a downward trend with a loss of {abs(diff)} units."
-    else:
-        return "The chart shows a flat trend with no significant change."
-
-def generate_signal(df):
-    signal = "Hold"
-    reasons = []
+def generate_sentiment(df):
+    sentiment = "Neutral"
+    bullish_signals = 0
+    bearish_signals = 0
 
     if df.empty or df.isnull().values.any():
-        return "Insufficient data", []
+        return "Neutral", []
 
     latest = df.iloc[-1]
+    reasons = []
 
+    # MACD Sentiment
     if 'MACD' in df.columns and 'Signal' in df.columns:
         if latest['MACD'] > latest['Signal']:
+            bullish_signals += 1
             reasons.append("MACD crossover indicates bullish momentum")
         elif latest['MACD'] < latest['Signal']:
+            bearish_signals += 1
             reasons.append("MACD crossover indicates bearish momentum")
 
+    # RSI Sentiment
     if 'RSI' in df.columns:
         if latest['RSI'] < 30:
-            reasons.append("RSI is below 30 (oversold)")
+            bullish_signals += 1
+            reasons.append("RSI is below 30 (oversold) - Bullish sentiment")
         elif latest['RSI'] > 70:
-            reasons.append("RSI is above 70 (overbought)")
+            bearish_signals += 1
+            reasons.append("RSI is above 70 (overbought) - Bearish sentiment")
 
+    # Stochastic RSI Sentiment
     if 'Stoch_%K' in df.columns and 'Stoch_%D' in df.columns:
         if latest['Stoch_%K'] > latest['Stoch_%D'] and latest['Stoch_%K'] < 20:
+            bullish_signals += 1
             reasons.append("Stochastic RSI crossover below 20 (bullish signal)")
         elif latest['Stoch_%K'] < latest['Stoch_%D'] and latest['Stoch_%K'] > 80:
+            bearish_signals += 1
             reasons.append("Stochastic RSI crossover above 80 (bearish signal)")
 
+    # Bollinger Bands Sentiment
     if 'bb_low' in df.columns and latest['close'] < latest['bb_low']:
-        reasons.append("Price below lower Bollinger Band (potential reversal)")
+        bullish_signals += 1
+        reasons.append("Price below lower Bollinger Band (potential reversal - Bullish)")
     elif 'bb_high' in df.columns and latest['close'] > latest['bb_high']:
-        reasons.append("Price above upper Bollinger Band (potential top)")
+        bearish_signals += 1
+        reasons.append("Price above upper Bollinger Band (potential reversal - Bearish)")
 
-    buy_signals = ["bullish" in r or "oversold" in r or "reversal" in r for r in reasons]
-    sell_signals = ["bearish" in r or "overbought" in r or "top" in r for r in reasons]
-
-    if sum(buy_signals) >= 2:
-        signal = "Buy"
-    elif sum(sell_signals) >= 2:
-        signal = "Sell"
-
-    return signal, reasons
+    # Sentiment Decision
+    if bullish_signals > bearish_signals:
+        sentiment = "Bullish"
+    elif bearish_signals > bullish_signals:
+        sentiment = "Bearish"
+    
+    return sentiment, reasons
 
 # --- UI ---
 timeframe = st.sidebar.selectbox("Select timeframe:", options=["1d", "1w"], index=0)
@@ -207,22 +207,22 @@ if 'Stoch_%K' in df.columns:
     ax.legend()
     st.pyplot(fig)
 
-# --- AI SIGNAL ENGINE ---
-st.subheader("AI Signal Engine")
-signal, reasons = generate_signal(df)
+# --- AI Sentiment Engine ---
+st.subheader("AI Sentiment Engine")
+sentiment, reasons = generate_sentiment(df)
 
-if signal == "Insufficient data":
-    st.warning("Unable to generate signal due to missing or invalid data.")
+if sentiment == "Neutral":
+    st.warning("Unable to determine sentiment — data may be insufficient or indicators are mixed.")
 else:
-    st.success(f"🔔 Signal: {signal}")
+    st.success(f"📝 Sentiment: {sentiment}")
     st.write("**Reasons:**")
     for reason in reasons:
         st.markdown(f"- {reason}")
 
     st.markdown("### 💡 Recommendation")
-    if signal == "Buy":
-        st.markdown("> Based on technical indicators, it may be a **good time to consider buying** SOL/USDT.")
-    elif signal == "Sell":
-        st.markdown("> Indicators suggest **bearish signals** — it might be time to consider **selling** or securing gains.")
+    if sentiment == "Bullish":
+        st.markdown("> Indicators suggest **bullish momentum** — it might be a good time to **buy** or hold positions.")
+    elif sentiment == "Bearish":
+        st.markdown("> Indicators suggest **bearish momentum** — consider securing gains or **selling**.")
     else:
-        st.markdown("> The market currently shows no strong trend. **Holding** may be the most prudent action.")
+        st.markdown("> Indicators show mixed signals. Consider a **neutral** stance or **holding**.")
