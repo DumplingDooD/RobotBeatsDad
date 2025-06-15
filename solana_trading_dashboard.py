@@ -189,5 +189,5 @@ except Exception as e:
 # --- AI SENTIMENT ENGINE ---
 st.subheader("AI Sentiment Engine")
 st.write("**Sentiment is derived from:**")
-st.markdown("- Technical Indicators: RSI, MACD, Stochastic, Bollinger Bands  
+st.markdown("- Technical Indicators: RSI, MACD, Stochastic, Bollinger Bands")
 - News sentiment from latest articles on Solana using NewsAPI")
