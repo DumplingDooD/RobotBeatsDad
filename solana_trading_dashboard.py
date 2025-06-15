@@ -10,7 +10,7 @@ import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import mplfinance as mpf
 
-# Ensure VADER lexicon is available
+# Ensure vader_lexicon is downloaded (critical for Streamlit Cloud)
 try:
     nltk.data.find('sentiment/vader_lexicon')
 except LookupError:
@@ -18,7 +18,7 @@ except LookupError:
 
 # --- CONFIG ---
 st.set_page_config(layout="wide")
-st.title("SOL/USDT Trading Dashboard (Using CoinGecko & NewsAPI)")
+st.title("SOL/USDT Trading Dashboard (CoinGecko + NewsAPI)")
 
 # --- TRIGGER RERUN ---
 if st.button("🔁 Rerun App"):
@@ -71,12 +71,12 @@ def add_indicators(df):
 
 # --- FETCH NEWS AND ANALYZE SENTIMENT ---
 def fetch_news_sentiment(query="Solana"):
-    news_api_key = "939abe49599c47f98a1bf6c116c49434"
+    news_api_key = "939abe49599c47f98a1bf6c116c49434"  # Your NewsAPI key
     url = f"https://newsapi.org/v2/everything?q={query}&language=en&sortBy=publishedAt&pageSize=10&apiKey={news_api_key}"
 
     response = requests.get(url)
     if response.status_code != 200:
-        st.warning("Failed to fetch news articles. Check API limit or key.")
+        st.warning("Failed to fetch news articles. Check API key or rate limit.")
         return {"Bullish": 0, "Bearish": 0, "Neutral": 0}
 
     articles = response.json().get("articles", [])
@@ -97,10 +97,10 @@ def fetch_news_sentiment(query="Solana"):
 
     return sentiment_scores
 
-# --- GENERATE FINAL SENTIMENT ---
+# --- GENERATE COMBINED SENTIMENT ---
 def generate_combined_sentiment(df):
     technical_sentiment, reasons = generate_sentiment(df)
-    news_sentiment = fetch_news_sentiment(query="Solana")
+    news_sentiment = fetch_news_sentiment()
 
     combined_sentiment = "Neutral"
     if news_sentiment["Bullish"] > news_sentiment["Bearish"]:
@@ -110,7 +110,7 @@ def generate_combined_sentiment(df):
 
     return combined_sentiment
 
-# --- GENERATE SIGNAL BASED ON TECHNICAL INDICATORS ---
+# --- TECHNICAL ANALYSIS LOGIC ---
 def generate_sentiment(df):
     sentiment = "Neutral"
     bullish_signals = 0
@@ -119,42 +119,39 @@ def generate_sentiment(df):
     latest = df.iloc[-1]
     reasons = []
 
-    if 'MACD' in df.columns and 'Signal' in df.columns:
-        if latest['MACD'] > latest['Signal']:
-            bullish_signals += 1
-            reasons.append("MACD crossover indicates bullish momentum")
-        elif latest['MACD'] < latest['Signal']:
-            bearish_signals += 1
-            reasons.append("MACD crossover indicates bearish momentum")
-
-    if 'RSI' in df.columns:
-        if latest['RSI'] < 30:
-            bullish_signals += 1
-            reasons.append("RSI is below 30 (oversold) - Bullish sentiment")
-        elif latest['RSI'] > 70:
-            bearish_signals += 1
-            reasons.append("RSI is above 70 (overbought) - Bearish sentiment")
-
-    if 'Stoch_%K' in df.columns and 'Stoch_%D' in df.columns:
-        if latest['Stoch_%K'] > latest['Stoch_%D'] and latest['Stoch_%K'] < 20:
-            bullish_signals += 1
-            reasons.append("Stochastic RSI crossover below 20 (bullish signal)")
-        elif latest['Stoch_%K'] < latest['Stoch_%D'] and latest['Stoch_%K'] > 80:
-            bearish_signals += 1
-            reasons.append("Stochastic RSI crossover above 80 (bearish signal)")
-
-    if 'bb_low' in df.columns and latest['close'] < latest['bb_low']:
+    if latest['MACD'] > latest['Signal']:
         bullish_signals += 1
-        reasons.append("Price below lower Bollinger Band (potential reversal - Bullish)")
-    elif 'bb_high' in df.columns and latest['close'] > latest['bb_high']:
+        reasons.append("MACD crossover → Bullish")
+    elif latest['MACD'] < latest['Signal']:
         bearish_signals += 1
-        reasons.append("Price above upper Bollinger Band (potential reversal - Bearish)")
+        reasons.append("MACD crossover → Bearish")
+
+    if latest['RSI'] < 30:
+        bullish_signals += 1
+        reasons.append("RSI < 30 → Oversold (Bullish)")
+    elif latest['RSI'] > 70:
+        bearish_signals += 1
+        reasons.append("RSI > 70 → Overbought (Bearish)")
+
+    if latest['Stoch_%K'] > latest['Stoch_%D'] and latest['Stoch_%K'] < 20:
+        bullish_signals += 1
+        reasons.append("Stochastic crossover < 20 → Bullish")
+    elif latest['Stoch_%K'] < latest['Stoch_%D'] and latest['Stoch_%K'] > 80:
+        bearish_signals += 1
+        reasons.append("Stochastic crossover > 80 → Bearish")
+
+    if latest['close'] < latest['bb_low']:
+        bullish_signals += 1
+        reasons.append("Price below lower BB → Bullish")
+    elif latest['close'] > latest['bb_high']:
+        bearish_signals += 1
+        reasons.append("Price above upper BB → Bearish")
 
     if bullish_signals > bearish_signals:
         sentiment = "Bullish"
     elif bearish_signals > bullish_signals:
         sentiment = "Bearish"
-    
+
     return sentiment, reasons
 
 # --- UI ---
@@ -165,29 +162,32 @@ limit = 90 if timeframe == "1d" else 30
 df = fetch_ohlcv(interval=interval_map[timeframe], outputsize=limit)
 df = add_indicators(df)
 
-st.write("Raw DataFrame Preview:")
-st.write(df.head())
+st.write("📊 **Preview of market data**")
+st.dataframe(df.tail(5))
 
 if df.empty:
-    st.warning(f"No data to display for {timeframe}. Try a different timeframe or check API status.")
+    st.warning(f"No data to display for {timeframe}. Try another interval.")
     st.stop()
 
 # --- TREND SUMMARY ---
-st.subheader("Price Trend Summary")
+st.subheader("📈 Price Trend Summary")
 combined_sentiment = generate_combined_sentiment(df)
-st.success(f"📝 Combined Sentiment: {combined_sentiment}")
+st.success(f"📝 Combined Market Sentiment: **{combined_sentiment}**")
 
-# --- CHARTS ---
-st.subheader("Candlestick Chart")
+# --- CANDLESTICK CHART ---
+st.subheader("📉 Candlestick Chart")
 try:
-    mpf_df = df[['open', 'high', 'low', 'close', 'volume']].copy()
-    mpf.plot(mpf_df, type='candle', volume=True, style='yahoo', title=f'SOL/USDT {timeframe} Candlestick Chart', mav=(9, 21), show_nontrading=False)
+    mpf_df = df[['open', 'high', 'low', 'close', 'volume']]
+    mpf.plot(mpf_df, type='candle', volume=True, style='yahoo', title=f'SOL/USDT - {timeframe.upper()}', mav=(9, 21), show_nontrading=False)
     st.pyplot(plt.gcf())
 except Exception as e:
-    st.error(f"Error plotting candlestick chart: {e}")
+    st.error(f"Chart rendering error: {e}")
 
-# --- AI SENTIMENT ENGINE ---
-st.subheader("AI Sentiment Engine")
-st.write("**Sentiment is derived from:**")
-st.markdown("- Technical Indicators: RSI, MACD, Stochastic, Bollinger Bands")
-- News sentiment from latest articles on Solana using NewsAPI")
+# --- SENTIMENT EXPLANATION ---
+st.subheader("🧠 Sentiment Analysis Method")
+st.markdown("""
+**Sources of Sentiment:**
+
+- Technical Indicators: RSI, MACD, Stochastic, Bollinger Bands  
+- News Sentiment: Based on recent Solana headlines via NewsAPI
+""")
