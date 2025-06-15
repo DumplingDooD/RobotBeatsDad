@@ -6,12 +6,19 @@ import matplotlib.pyplot as plt
 from ta.momentum import RSIIndicator, StochasticOscillator
 from ta.trend import MACD
 from ta.volatility import BollingerBands
+import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import mplfinance as mpf
 
+# Ensure VADER lexicon is available
+try:
+    nltk.data.find('sentiment/vader_lexicon')
+except LookupError:
+    nltk.download('vader_lexicon')
+
 # --- CONFIG ---
 st.set_page_config(layout="wide")
-st.title("SOL/USDT Trading Dashboard (Using CoinGecko API)")
+st.title("SOL/USDT Trading Dashboard (Using CoinGecko & NewsAPI)")
 
 # --- TRIGGER RERUN ---
 if st.button("🔁 Rerun App"):
@@ -64,19 +71,21 @@ def add_indicators(df):
 
 # --- FETCH NEWS AND ANALYZE SENTIMENT ---
 def fetch_news_sentiment(query="Solana"):
-    # Setup NewsAPI (replace with your API key)
-    news_api_key = "your_news_api_key_here"
-    url = f"https://newsapi.org/v2/everything?q={query}&apiKey={news_api_key}"
+    news_api_key = "939abe49599c47f98a1bf6c116c49434"
+    url = f"https://newsapi.org/v2/everything?q={query}&language=en&sortBy=publishedAt&pageSize=10&apiKey={news_api_key}"
 
     response = requests.get(url)
+    if response.status_code != 200:
+        st.warning("Failed to fetch news articles. Check API limit or key.")
+        return {"Bullish": 0, "Bearish": 0, "Neutral": 0}
+
     articles = response.json().get("articles", [])
 
-    # Sentiment analysis
     sia = SentimentIntensityAnalyzer()
     sentiment_scores = {"Bullish": 0, "Bearish": 0, "Neutral": 0}
 
     for article in articles:
-        text = article["title"] + " " + article["description"]
+        text = f"{article.get('title', '')} {article.get('description', '')}"
         sentiment_score = sia.polarity_scores(text)["compound"]
         
         if sentiment_score > 0.05:
@@ -93,7 +102,6 @@ def generate_combined_sentiment(df):
     technical_sentiment, reasons = generate_sentiment(df)
     news_sentiment = fetch_news_sentiment(query="Solana")
 
-    # Combine technical sentiment and news sentiment
     combined_sentiment = "Neutral"
     if news_sentiment["Bullish"] > news_sentiment["Bearish"]:
         combined_sentiment = "Bullish"
@@ -180,6 +188,6 @@ except Exception as e:
 
 # --- AI SENTIMENT ENGINE ---
 st.subheader("AI Sentiment Engine")
-st.write("**Reasons for Sentiment:**")
-st.write(f"Sentiment was derived from both **technical indicators** and **news sentiment**.")
-
+st.write("**Sentiment is derived from:**")
+st.markdown("- Technical Indicators: RSI, MACD, Stochastic, Bollinger Bands  
+- News sentiment from latest articles on Solana using NewsAPI")
