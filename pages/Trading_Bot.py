@@ -8,6 +8,7 @@ from ta.trend import MACD
 from ta.volatility import BollingerBands
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import matplotlib.pyplot as plt
 
 # Ensure VADER lexicon is downloaded
 try:
@@ -31,7 +32,6 @@ def fetch_price():
 
 # --- Fetch Sentiment (Placeholder: uses VADER on recent headlines) ---
 def fetch_sentiment():
-    # In real use: call your actual sentiment engine
     sia = SentimentIntensityAnalyzer()
     sample_texts = [
         "Solana hits new all-time high after ETF speculation",
@@ -52,6 +52,22 @@ if "position" not in st.session_state:
     st.session_state.position = "None"
     st.session_state.entry_price = None
     st.session_state.trade_log = []
+    st.session_state.capital = 1000.0
+    st.session_state.balance = 1000.0
+    st.session_state.holdings = 0.0
+    st.session_state.net_worth_log = []
+
+# --- User-Defined Starting Capital ---
+st.sidebar.header("🔧 Bot Settings")
+initial_capital = st.sidebar.number_input("Set Initial Capital ($)", min_value=100.0, value=st.session_state.capital, step=100.0)
+if initial_capital != st.session_state.capital:
+    st.session_state.capital = initial_capital
+    st.session_state.balance = initial_capital
+    st.session_state.trade_log = []
+    st.session_state.position = "None"
+    st.session_state.entry_price = None
+    st.session_state.holdings = 0.0
+    st.session_state.net_worth_log = []
 
 # --- Trading Logic ---
 def execute_trade(price, sentiment):
@@ -61,30 +77,47 @@ def execute_trade(price, sentiment):
     if sentiment == "Bullish" and st.session_state.position == "None":
         st.session_state.position = "Long"
         st.session_state.entry_price = price
-        log.append({"time": now, "action": "BUY", "price": price})
+        st.session_state.holdings = st.session_state.balance / price
+        st.session_state.balance = 0.0
+        log.append({"time": now, "action": "BUY", "price": price, "holdings": st.session_state.holdings})
 
     elif sentiment == "Bearish" and st.session_state.position == "Long":
-        pnl = price - st.session_state.entry_price
-        pct = (pnl / st.session_state.entry_price) * 100
-        log.append({"time": now, "action": "SELL", "price": price, "pnl": pnl, "pct": pct})
+        proceeds = st.session_state.holdings * price
+        pnl = proceeds - st.session_state.capital
+        pct = (pnl / st.session_state.capital) * 100
+        st.session_state.balance = proceeds
         st.session_state.position = "None"
         st.session_state.entry_price = None
+        st.session_state.holdings = 0.0
+        log.append({"time": now, "action": "SELL", "price": price, "pnl": pnl, "pct": pct, "balance": st.session_state.balance})
 
 # --- Run Bot ---
 price = fetch_price()
 sentiment = fetch_sentiment()
 execute_trade(price, sentiment)
 
+# --- Track Net Worth ---
+if st.session_state.position == "Long":
+    current_value = st.session_state.holdings * price
+else:
+    current_value = st.session_state.balance
+
+st.session_state.net_worth_log.append({"time": datetime.datetime.now(), "net_worth": current_value})
+
 # --- Display Info ---
 st.subheader("📊 Current Bot Status")
 st.write(f"**Current Price:** ${price:.2f}")
 st.write(f"**Sentiment Signal:** `{sentiment}`")
 st.write(f"**Position:** {st.session_state.position}")
+st.write(f"**Starting Capital:** ${st.session_state.capital:.2f}")
+st.write(f"**Current Balance:** ${st.session_state.balance:.2f}")
+
 if st.session_state.position == "Long":
     entry = st.session_state.entry_price
-    change = price - entry
-    change_pct = (change / entry) * 100
-    st.success(f"Holding since ${entry:.2f} → Current PnL: ${change:.2f} ({change_pct:.2f}%)")
+    current_value = st.session_state.holdings * price
+    change = current_value - st.session_state.capital
+    change_pct = (change / st.session_state.capital) * 100
+    st.success(f"Holding since ${entry:.2f} → Current Position Value: ${current_value:.2f} | PnL: ${change:.2f} ({change_pct:.2f}%)")
 
 # --- Trade Log ---
 st.subheader("🧾 Trade History")
@@ -93,3 +126,12 @@ if st.session_state.trade_log:
     st.dataframe(df[::-1], use_container_width=True)
 else:
     st.info("No trades yet.")
+
+# --- Net Worth Chart ---
+st.subheader("📈 Capital Growth Over Time")
+if st.session_state.net_worth_log:
+    df_net = pd.DataFrame(st.session_state.net_worth_log)
+    df_net.set_index("time", inplace=True)
+    st.line_chart(df_net)
+else:
+    st.info("Net worth chart will appear after the first data point is recorded.")
