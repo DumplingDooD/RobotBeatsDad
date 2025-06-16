@@ -10,7 +10,7 @@ import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import mplfinance as mpf
 
-# Ensure vader_lexicon is downloaded (critical for Streamlit Cloud)
+# Ensure vader_lexicon is downloaded
 try:
     nltk.data.find('sentiment/vader_lexicon')
 except LookupError:
@@ -71,7 +71,7 @@ def add_indicators(df):
 
 # --- FETCH NEWS AND ANALYZE SENTIMENT ---
 def fetch_news_sentiment(query="Solana"):
-    news_api_key = "939abe49599c47f98a1bf6c116c49434"  # Your NewsAPI key
+    news_api_key = "939abe49599c47f98a1bf6c116c49434"
     url = f"https://newsapi.org/v2/everything?q={query}&language=en&sortBy=publishedAt&pageSize=10&apiKey={news_api_key}"
 
     response = requests.get(url)
@@ -86,32 +86,35 @@ def fetch_news_sentiment(query="Solana"):
     annotated_articles = []
 
     for article in articles:
-        title = article.get("title", "")
-        description = article.get("description", "")
-        text = f"{title} {description}"
+        title = article.get("title", "").strip()
+        description = article.get("description", "").strip()
+        url = article.get("url", "#")
+        combined_text = f"{title}. {description}"
 
-        score = sia.polarity_scores(text)["compound"]
+        score = sia.polarity_scores(combined_text)["compound"]
 
         if score > 0.05:
             sentiment = "Bullish"
-            reason = "Positive language detected"
+            reason = "Positive language detected (compound > 0.05)"
         elif score < -0.05:
             sentiment = "Bearish"
-            reason = "Negative tone or concern detected"
+            reason = "Negative tone detected (compound < -0.05)"
         else:
             sentiment = "Neutral"
-            reason = "Balanced or uncertain tone"
+            reason = "Neutral or balanced sentiment"
 
         sentiment_scores[sentiment] += 1
         annotated_articles.append({
             "headline": title,
+            "description": description,
             "sentiment": sentiment,
-            "reason": reason
+            "reason": reason,
+            "url": url
         })
 
     return sentiment_scores, annotated_articles
 
-# --- GENERATE COMBINED SENTIMENT ---
+# --- COMBINE TECHNICAL + NEWS SENTIMENT ---
 def generate_combined_sentiment(df):
     technical_sentiment, reasons = generate_sentiment(df)
     news_sentiment, annotated_articles = fetch_news_sentiment()
@@ -124,7 +127,7 @@ def generate_combined_sentiment(df):
 
     return combined_sentiment, news_sentiment, annotated_articles
 
-# --- TECHNICAL ANALYSIS LOGIC ---
+# --- TECHNICAL SENTIMENT LOGIC ---
 def generate_sentiment(df):
     sentiment = "Neutral"
     bullish_signals = 0
@@ -204,18 +207,25 @@ try:
 except Exception as e:
     st.error(f"Chart rendering error: {e}")
 
-# --- SENTIMENT HEADLINES ---
+# --- SENTIMENT HEADLINES WITH EXPLANATIONS ---
 st.subheader("📰 Relevant News Headlines and Sentiment")
-for article in annotated_articles:
-    with st.expander(f"{article['headline']}"):
-        st.markdown(f"**Sentiment:** `{article['sentiment']}`")
-        st.caption(f"🧠 Reason: _{article['reason']}_")
 
-# --- SENTIMENT EXPLANATION ---
+if not annotated_articles:
+    st.info("No news articles could be analyzed.")
+else:
+    for article in annotated_articles:
+        st.markdown(f"**🗞️ [{article['headline']}]({article['url']})**")
+        st.write(f"- **Sentiment:** `{article['sentiment']}`")
+        st.write(f"- **Reason:** _{article['reason']}_")
+        if article['description']:
+            st.write(f"- **Summary:** {article['description']}")
+        st.markdown("---")
+
+# --- SENTIMENT ENGINE EXPLANATION ---
 st.subheader("🧠 Sentiment Analysis Method")
 st.markdown("""
 **Sources of Sentiment:**
 
 - Technical Indicators: RSI, MACD, Stochastic, Bollinger Bands  
-- News Sentiment: Based on recent Solana headlines via NewsAPI
+- News Sentiment: Headlines and summaries analyzed using VADER (NLTK)
 """)
