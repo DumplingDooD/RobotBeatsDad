@@ -77,30 +77,44 @@ def fetch_news_sentiment(query="Solana"):
     response = requests.get(url)
     if response.status_code != 200:
         st.warning("Failed to fetch news articles. Check API key or rate limit.")
-        return {"Bullish": 0, "Bearish": 0, "Neutral": 0}
+        return {"Bullish": 0, "Bearish": 0, "Neutral": 0}, []
 
     articles = response.json().get("articles", [])
-
     sia = SentimentIntensityAnalyzer()
+
     sentiment_scores = {"Bullish": 0, "Bearish": 0, "Neutral": 0}
+    annotated_articles = []
 
     for article in articles:
-        text = f"{article.get('title', '')} {article.get('description', '')}"
-        sentiment_score = sia.polarity_scores(text)["compound"]
-        
-        if sentiment_score > 0.05:
-            sentiment_scores["Bullish"] += 1
-        elif sentiment_score < -0.05:
-            sentiment_scores["Bearish"] += 1
-        else:
-            sentiment_scores["Neutral"] += 1
+        title = article.get("title", "")
+        description = article.get("description", "")
+        text = f"{title} {description}"
 
-    return sentiment_scores
+        score = sia.polarity_scores(text)["compound"]
+
+        if score > 0.05:
+            sentiment = "Bullish"
+            reason = "Positive language detected"
+        elif score < -0.05:
+            sentiment = "Bearish"
+            reason = "Negative tone or concern detected"
+        else:
+            sentiment = "Neutral"
+            reason = "Balanced or uncertain tone"
+
+        sentiment_scores[sentiment] += 1
+        annotated_articles.append({
+            "headline": title,
+            "sentiment": sentiment,
+            "reason": reason
+        })
+
+    return sentiment_scores, annotated_articles
 
 # --- GENERATE COMBINED SENTIMENT ---
 def generate_combined_sentiment(df):
     technical_sentiment, reasons = generate_sentiment(df)
-    news_sentiment = fetch_news_sentiment()
+    news_sentiment, annotated_articles = fetch_news_sentiment()
 
     combined_sentiment = "Neutral"
     if news_sentiment["Bullish"] > news_sentiment["Bearish"]:
@@ -108,7 +122,7 @@ def generate_combined_sentiment(df):
     elif news_sentiment["Bearish"] > news_sentiment["Bullish"]:
         combined_sentiment = "Bearish"
 
-    return combined_sentiment
+    return combined_sentiment, news_sentiment, annotated_articles
 
 # --- TECHNICAL ANALYSIS LOGIC ---
 def generate_sentiment(df):
@@ -171,8 +185,15 @@ if df.empty:
 
 # --- TREND SUMMARY ---
 st.subheader("📈 Price Trend Summary")
-combined_sentiment = generate_combined_sentiment(df)
+combined_sentiment, news_sentiment, annotated_articles = generate_combined_sentiment(df)
+
 st.success(f"📝 Combined Market Sentiment: **{combined_sentiment}**")
+st.markdown(f"""
+**News Sentiment Breakdown:**  
+🟢 Bullish: `{news_sentiment['Bullish']}`  
+🔴 Bearish: `{news_sentiment['Bearish']}`  
+⚪ Neutral: `{news_sentiment['Neutral']}`
+""")
 
 # --- CANDLESTICK CHART ---
 st.subheader("📉 Candlestick Chart")
@@ -182,6 +203,13 @@ try:
     st.pyplot(plt.gcf())
 except Exception as e:
     st.error(f"Chart rendering error: {e}")
+
+# --- SENTIMENT HEADLINES ---
+st.subheader("📰 Relevant News Headlines and Sentiment")
+for article in annotated_articles:
+    with st.expander(f"{article['headline']}"):
+        st.markdown(f"**Sentiment:** `{article['sentiment']}`")
+        st.caption(f"🧠 Reason: _{article['reason']}_")
 
 # --- SENTIMENT EXPLANATION ---
 st.subheader("🧠 Sentiment Analysis Method")
