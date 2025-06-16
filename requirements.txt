@@ -6,3 +6,4 @@ requests
 ta
 mplfinance
 textblob
+pycoingecko
