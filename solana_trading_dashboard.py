@@ -9,116 +9,117 @@ import matplotlib.pyplot as plt
 import datetime
 
 st.set_page_config(layout="wide")
-st.title("⚡ SOL/USDT Visual Sentiment Engine with Explanations")
+st.title("🚦 SOL/USDT Sentiment Engine with Traffic Light & Fear/Greed")
 
-BASE_URL = "https://api.coingecko.com/api/v3"
-ASSET_ID = "solana"
-VS_CURRENCY = "usd"
-DAYS = "90"
-
+# --- Fetch OHLCV data ---
 @st.cache_data(ttl=3600)
 def fetch_ohlcv():
-    url = f"{BASE_URL}/coins/{ASSET_ID}/market_chart?vs_currency={VS_CURRENCY}&days={DAYS}&interval=daily"
+    url = "https://api.coingecko.com/api/v3/coins/solana/market_chart?vs_currency=usd&days=120&interval=daily"
     response = requests.get(url)
-    if response.status_code != 200:
-        st.error("Error fetching data from CoinGecko.")
-        return pd.DataFrame()
     prices = response.json().get("prices", [])
     df = pd.DataFrame(prices, columns=["timestamp", "close"])
     df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
     df.set_index("datetime", inplace=True)
     df["close"] = df["close"].astype(float)
-    df["open"] = df["close"].shift(1).ffill()
-    df["high"] = df[["open", "close"]].max(axis=1) * (1 + np.random.uniform(0, 0.01, len(df)))
-    df["low"] = df[["open", "close"]].min(axis=1) * (1 - np.random.uniform(0, 0.01, len(df)))
+    df["open"] = df["close"].shift(1)
+    df["high"] = df[["open", "close"]].max(axis=1)
+    df["low"] = df[["open", "close"]].min(axis=1)
     df["volume"] = np.random.uniform(1000000, 5000000, size=len(df))
     df.dropna(inplace=True)
     return df
 
+# --- Add Indicators ---
 def add_indicators(df):
-    df["MACD"] = MACD(df['close']).macd()
-    df["Signal"] = MACD(df['close']).macd_signal()
-    df["RSI"] = RSIIndicator(df['close']).rsi()
+    macd_indicator = MACD(df['close'])
+    df['MACD'] = macd_indicator.macd()
+    df['Signal'] = macd_indicator.macd_signal()
+    df['RSI'] = RSIIndicator(df['close']).rsi()
     stoch = StochasticOscillator(df['high'], df['low'], df['close'])
-    df["Stoch_%K"] = stoch.stoch()
-    df["Stoch_%D"] = stoch.stoch_signal()
-    bb = BollingerBands(close=df['close'])
-    df["BB_High"] = bb.bollinger_hband()
-    df["BB_Low"] = bb.bollinger_lband()
+    df['Stoch_%K'] = stoch.stoch()
+    df['Stoch_%D'] = stoch.stoch_signal()
+    bb = BollingerBands(df['close'])
+    df['BB_High'] = bb.bollinger_hband()
+    df['BB_Low'] = bb.bollinger_lband()
+    df.dropna(inplace=True)
     return df
 
+# --- Fetch Fear & Greed Index ---
+def fetch_fear_greed():
+    try:
+        response = requests.get("https://api.alternative.me/fng/?limit=1")
+        value = int(response.json()['data'][0]['value'])
+        if value >= 75:
+            return "Extreme Greed", "Bearish"
+        elif value >= 50:
+            return "Greed", "Bearish"
+        elif value > 25:
+            return "Fear", "Bullish"
+        else:
+            return "Extreme Fear", "Bullish"
+    except:
+        return "Unavailable", "Neutral"
+
+# --- Classify sentiment for each day ---
 def classify_sentiment(row):
-    sentiment = []
+    sentiments = {}
+    # MACD
     if row['MACD'] > row['Signal']:
-        sentiment.append("Bullish")
+        sentiments['MACD'] = "Bullish"
     elif row['MACD'] < row['Signal']:
-        sentiment.append("Bearish")
+        sentiments['MACD'] = "Bearish"
     else:
-        sentiment.append("Neutral")
+        sentiments['MACD'] = "Neutral"
+    # RSI
     if row['RSI'] < 30:
-        sentiment.append("Bullish")
+        sentiments['RSI'] = "Bullish"
     elif row['RSI'] > 70:
-        sentiment.append("Bearish")
+        sentiments['RSI'] = "Bearish"
     else:
-        sentiment.append("Neutral")
+        sentiments['RSI'] = "Neutral"
+    # Stochastic
     if row['Stoch_%K'] > row['Stoch_%D'] and row['Stoch_%K'] < 20:
-        sentiment.append("Bullish")
+        sentiments['Stochastic'] = "Bullish"
     elif row['Stoch_%K'] < row['Stoch_%D'] and row['Stoch_%K'] > 80:
-        sentiment.append("Bearish")
+        sentiments['Stochastic'] = "Bearish"
     else:
-        sentiment.append("Neutral")
+        sentiments['Stochastic'] = "Neutral"
+    # Bollinger Bands
     if row['close'] < row['BB_Low']:
-        sentiment.append("Bullish")
+        sentiments['Bollinger'] = "Bullish"
     elif row['close'] > row['BB_High']:
-        sentiment.append("Bearish")
+        sentiments['Bollinger'] = "Bearish"
     else:
-        sentiment.append("Neutral")
-    return sentiment
+        sentiments['Bollinger'] = "Neutral"
+    return sentiments
 
+# --- Display traffic light ---
+def traffic_light(status):
+    colors = {"Bullish": "🟢 Bullish", "Bearish": "🔴 Bearish", "Neutral": "🟡 Neutral"}
+    return colors.get(status, "🟡 Neutral")
+
+# --- Main Workflow ---
 df = fetch_ohlcv()
-if df.empty:
-    st.stop()
 df = add_indicators(df)
-df['Sentiments'] = df.apply(classify_sentiment, axis=1)
+fear_greed_value, fear_greed_sentiment = fetch_fear_greed()
 
-st.subheader("📊 Indicator Visualizations")
+st.subheader(f"😨 Fear & Greed Index: {fear_greed_value} → {traffic_light(fear_greed_sentiment)}")
 
-fig, axs = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
-axs[0].plot(df.index, df['close'], label='Close Price')
-axs[0].plot(df.index, df['BB_High'], linestyle='--', label='BB High')
-axs[0].plot(df.index, df['BB_Low'], linestyle='--', label='BB Low')
-axs[0].set_title("Price with Bollinger Bands")
-axs[0].legend()
+sentiment_table = []
+for idx, row in df.tail(30).iterrows():
+    sentiments = classify_sentiment(row)
+    daily_decision = max(set(sentiments.values()), key=list(sentiments.values()).count)
+    sentiment_table.append({
+        "Date": idx.date(),
+        "Close": row['close'],
+        "MACD": traffic_light(sentiments['MACD']),
+        "RSI": traffic_light(sentiments['RSI']),
+        "Stochastic": traffic_light(sentiments['Stochastic']),
+        "Bollinger": traffic_light(sentiments['Bollinger']),
+        "Daily Decision": traffic_light(daily_decision)
+    })
 
-axs[1].plot(df.index, df['MACD'], label='MACD')
-axs[1].plot(df.index, df['Signal'], label='Signal')
-axs[1].set_title("MACD vs Signal")
-axs[1].legend()
+st.subheader("📋 Sentiment Traffic Light Table")
+st.dataframe(pd.DataFrame(sentiment_table))
 
-axs[2].plot(df.index, df['RSI'], color='purple')
-axs[2].axhline(70, color='red', linestyle='--')
-axs[2].axhline(30, color='green', linestyle='--')
-axs[2].set_title("RSI with Thresholds")
+st.success("✅ The program now makes daily decisions using real indicators with a clear traffic light system and integrated Fear & Greed sentiment, ready for your pipeline.")
 
-axs[3].plot(df.index, df['Stoch_%K'], label='%K')
-axs[3].plot(df.index, df['Stoch_%D'], label='%D')
-axs[3].set_title("Stochastic Oscillator")
-axs[3].legend()
-
-plt.tight_layout()
-st.pyplot(fig)
-
-st.markdown("""
-### 🧠 Explanation
-- **MACD:** Bullish if MACD > Signal, Bearish if MACD < Signal.
-- **RSI:** Bullish if RSI < 30 (oversold), Bearish if RSI > 70 (overbought).
-- **Stochastic:** Bullish if %K > %D under 20, Bearish if %K < %D above 80.
-- **Bollinger Bands:** Bullish if price < BB Low, Bearish if price > BB High.
-- Each indicator also recognizes Neutral when conditions are in-between.
-""")
-
-st.subheader("📋 Sentiment Table")
-sentiment_table = df[['close', 'MACD', 'Signal', 'RSI', 'Stoch_%K', 'Stoch_%D', 'BB_High', 'BB_Low', 'Sentiments']].tail(30)
-st.dataframe(sentiment_table, use_container_width=True)
-
-st.info("✅ This dashboard now visually explains and displays the sentiment derived from each indicator clearly, ready to integrate with your trading logic.")
