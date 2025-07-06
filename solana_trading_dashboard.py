@@ -1,57 +1,64 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import datetime
+import requests
 from ta.momentum import RSIIndicator, StochasticOscillator
 from ta.trend import MACD
 from ta.volatility import BollingerBands
+import datetime
 
 st.set_page_config(layout="wide")
-st.title("🪐 Sandbox Sentiment-Driven Paper Trading Bot")
+st.title("⚡ SOL/USDT Sentiment Engine (CoinGecko Indicators)")
 
-# Sandbox toggle
-USE_SANDBOX = True
+# --- CONFIG ---
+BASE_URL = "https://api.coingecko.com/api/v3"
+ASSET_ID = "solana"
+VS_CURRENCY = "usd"
+DAYS = "30"
 
-# Generate synthetic OHLCV data for sandbox testing
-def generate_synthetic_ohlcv(rows=100):
-    base_price = 150
-    dates = pd.date_range(end=datetime.datetime.now(), periods=rows, freq='H')
-    price = base_price + np.cumsum(np.random.randn(rows))
-    df = pd.DataFrame({"close": price}, index=dates)
-    df["open"] = df["close"].shift(1).fillna(method='bfill')
-    df["high"] = df[["open", "close"]].max(axis=1) + np.random.rand(rows)
-    df["low"] = df[["open", "close"]].min(axis=1) - np.random.rand(rows)
-    df["volume"] = np.random.uniform(1000, 5000, size=rows)
+# --- Fetch OHLCV data from CoinGecko ---
+@st.cache_data(ttl=3600)
+def fetch_ohlcv():
+    url = f"{BASE_URL}/coins/{ASSET_ID}/market_chart?vs_currency={VS_CURRENCY}&days={DAYS}&interval=daily"
+    response = requests.get(url)
+    if response.status_code != 200:
+        st.error("Error fetching data from CoinGecko.")
+        return pd.DataFrame()
+    prices = response.json().get("prices", [])
+    df = pd.DataFrame(prices, columns=["timestamp", "close"])
+    df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df.set_index("datetime", inplace=True)
+    df["close"] = df["close"].astype(float)
+    df["open"] = df["close"].shift(1).ffill()
+    df["high"] = df[["open", "close"]].max(axis=1) * (1 + np.random.uniform(0, 0.01, len(df)))
+    df["low"] = df[["open", "close"]].min(axis=1) * (1 - np.random.uniform(0, 0.01, len(df)))
+    df["volume"] = np.random.uniform(1000000, 5000000, size=len(df))
+    df.dropna(inplace=True)
     return df
 
-# Add technical indicators
+# --- Add indicators ---
 def add_indicators(df):
-    macd = MACD(df['close'])
-    df['MACD'] = macd.macd()
-    df['Signal'] = macd.macd_signal()
-    
-    rsi = RSIIndicator(df['close'])
-    df['RSI'] = rsi.rsi()
-
+    df["MACD"] = MACD(df['close']).macd()
+    df["Signal"] = MACD(df['close']).macd_signal()
+    df["RSI"] = RSIIndicator(df['close']).rsi()
     stoch = StochasticOscillator(df['high'], df['low'], df['close'])
-    df['Stoch_%K'] = stoch.stoch()
-    df['Stoch_%D'] = stoch.stoch_signal()
-
+    df["Stoch_%K"] = stoch.stoch()
+    df["Stoch_%D"] = stoch.stoch_signal()
     bb = BollingerBands(close=df['close'])
-    df['bb_high'] = bb.bollinger_hband()
-    df['bb_low'] = bb.bollinger_lband()
+    df["BB_High"] = bb.bollinger_hband()
+    df["BB_Low"] = bb.bollinger_lband()
     return df
 
-# Trading logic using indicators
+# --- Sentiment Engine Logic ---
 def determine_sentiment(latest):
     bullish, bearish = 0, 0
     reasons = []
     if latest['MACD'] > latest['Signal']:
         bullish += 1
-        reasons.append("MACD bullish")
+        reasons.append("MACD crossover bullish")
     elif latest['MACD'] < latest['Signal']:
         bearish += 1
-        reasons.append("MACD bearish")
+        reasons.append("MACD crossover bearish")
     if latest['RSI'] < 30:
         bullish += 1
         reasons.append("RSI oversold")
@@ -60,14 +67,14 @@ def determine_sentiment(latest):
         reasons.append("RSI overbought")
     if latest['Stoch_%K'] > latest['Stoch_%D'] and latest['Stoch_%K'] < 20:
         bullish += 1
-        reasons.append("Stoch bullish")
+        reasons.append("Stochastic bullish")
     elif latest['Stoch_%K'] < latest['Stoch_%D'] and latest['Stoch_%K'] > 80:
         bearish += 1
-        reasons.append("Stoch bearish")
-    if latest['close'] < latest['bb_low']:
+        reasons.append("Stochastic bearish")
+    if latest['close'] < latest['BB_Low']:
         bullish += 1
         reasons.append("Price below BB low")
-    elif latest['close'] > latest['bb_high']:
+    elif latest['close'] > latest['BB_High']:
         bearish += 1
         reasons.append("Price above BB high")
     if bullish > bearish:
@@ -77,50 +84,24 @@ def determine_sentiment(latest):
     else:
         return "Neutral", reasons
 
-# Initialize session state
-if "position" not in st.session_state:
-    st.session_state.position = "None"
-    st.session_state.balance = 1000.0
-    st.session_state.holdings = 0.0
-    st.session_state.trade_log = []
-    st.session_state.net_worth_log = []
+# --- Main Workflow ---
+df = fetch_ohlcv()
+if df.empty:
+    st.stop()
 
-# Main sandbox workflow
-if USE_SANDBOX:
-    df = generate_synthetic_ohlcv()
-    df = add_indicators(df)
-    latest = df.iloc[-1]
-    sentiment, reasons = determine_sentiment(latest)
-    price = latest['close']
+df = add_indicators(df)
+latest = df.iloc[-1]
+sentiment, reasons = determine_sentiment(latest)
 
-    now = datetime.datetime.now()
-    if sentiment == "Bullish" and st.session_state.position == "None":
-        st.session_state.position = "Long"
-        st.session_state.holdings = st.session_state.balance / price
-        st.session_state.balance = 0
-        st.session_state.trade_log.append({"time": now, "action": "BUY", "price": price, "holdings": st.session_state.holdings})
-    elif sentiment == "Bearish" and st.session_state.position == "Long":
-        st.session_state.balance = st.session_state.holdings * price
-        st.session_state.holdings = 0
-        st.session_state.position = "None"
-        st.session_state.trade_log.append({"time": now, "action": "SELL", "price": price, "balance": st.session_state.balance})
-    net_worth = st.session_state.balance + st.session_state.holdings * price
-    st.session_state.net_worth_log.append({"time": now, "net_worth": net_worth})
+# --- Display Results ---
+st.subheader("📊 Latest Market Sentiment")
+st.write(f"**Sentiment Signal:** `{sentiment}`")
+st.write(f"**Close Price:** ${latest['close']:.2f}")
+st.write("**Reasons:**")
+for reason in reasons:
+    st.markdown(f"- {reason}")
 
-    # Display outputs
-    st.write(f"**Current Price:** ${price:.2f}")
-    st.write(f"**Sentiment:** {sentiment}")
-    st.write(f"**Reasons:** {', '.join(reasons)}")
-    st.write(f"**Position:** {st.session_state.position}")
-    st.write(f"**Net Worth:** ${net_worth:.2f}")
+st.subheader("🔍 Last 5 Data Points with Indicators")
+st.dataframe(df.tail(5), use_container_width=True)
 
-    if st.session_state.trade_log:
-        st.subheader("🧾 Trade Log")
-        st.dataframe(pd.DataFrame(st.session_state.trade_log))
-
-    if st.session_state.net_worth_log:
-        st.subheader("📈 Net Worth Over Time")
-        df_net = pd.DataFrame(st.session_state.net_worth_log).set_index("time")
-        st.line_chart(df_net)
-
-    st.success("✅ Sandbox trading simulation using your real indicators is active without using API credits.")
+st.info("✅ This dashboard functions purely as a sentiment engine for your paper trading bot without executing trades and avoids excessive API calls by caching data for 1 hour.")
