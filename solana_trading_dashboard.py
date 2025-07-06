@@ -1,56 +1,30 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
-import matplotlib.pyplot as plt
+import datetime
 from ta.momentum import RSIIndicator, StochasticOscillator
 from ta.trend import MACD
 from ta.volatility import BollingerBands
-import nltk
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-import mplfinance as mpf
 
-# Ensure vader_lexicon is downloaded
-try:
-    nltk.data.find('sentiment/vader_lexicon')
-except LookupError:
-    nltk.download('vader_lexicon')
-
-# --- CONFIG ---
 st.set_page_config(layout="wide")
-st.title("SOL/USDT Trading Dashboard (CoinGecko + NewsAPI)")
+st.title("🪐 Sandbox Sentiment-Driven Paper Trading Bot")
 
-# --- TRIGGER RERUN ---
-if st.button("🔁 Rerun App"):
-    st.session_state.clear()
-    st.experimental_rerun()
+# Sandbox toggle
+USE_SANDBOX = True
 
-# --- FETCH OHLCV DATA ---
-@st.cache_data(ttl=3600)
-def fetch_ohlcv(interval='daily', outputsize=180):
-    symbol = "solana"
-    vs_currency = "usd"
-    days = "30"
-    url = f"https://api.coingecko.com/api/v3/coins/{symbol}/market_chart?vs_currency={vs_currency}&days={days}&interval={interval}"
-    response = requests.get(url)
+# Generate synthetic OHLCV data for sandbox testing
+def generate_synthetic_ohlcv(rows=100):
+    base_price = 150
+    dates = pd.date_range(end=datetime.datetime.now(), periods=rows, freq='H')
+    price = base_price + np.cumsum(np.random.randn(rows))
+    df = pd.DataFrame({"close": price}, index=dates)
+    df["open"] = df["close"].shift(1).fillna(method='bfill')
+    df["high"] = df[["open", "close"]].max(axis=1) + np.random.rand(rows)
+    df["low"] = df[["open", "close"]].min(axis=1) - np.random.rand(rows)
+    df["volume"] = np.random.uniform(1000, 5000, size=rows)
+    return df
 
-    if response.status_code != 200:
-        st.error("Error fetching data from CoinGecko API.")
-        return pd.DataFrame()
-
-    prices = response.json().get("prices", [])
-    df = pd.DataFrame(prices, columns=["timestamp", "close"])
-    df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df.set_index("datetime", inplace=True)
-    df["close"] = df["close"].astype(float)
-    df["open"] = df["close"].shift(1).ffill()  
-    df["high"] = df[["open", "close"]].max(axis=1)
-    df["low"] = df[["open", "close"]].min(axis=1)
-    df["volume"] = np.random.uniform(1000000, 5000000, size=len(df))
-    df.dropna(subset=["close", "open", "high", "low"], inplace=True)
-    return df.tail(outputsize)
-
-# --- ADD TECHNICAL INDICATORS ---
+# Add technical indicators
 def add_indicators(df):
     macd = MACD(df['close'])
     df['MACD'] = macd.macd()
@@ -66,166 +40,87 @@ def add_indicators(df):
     bb = BollingerBands(close=df['close'])
     df['bb_high'] = bb.bollinger_hband()
     df['bb_low'] = bb.bollinger_lband()
-
     return df
 
-# --- FETCH NEWS AND ANALYZE SENTIMENT ---
-def fetch_news_sentiment(query="Solana"):
-    news_api_key = "939abe49599c47f98a1bf6c116c49434"
-    url = f"https://newsapi.org/v2/everything?q={query}&language=en&sortBy=publishedAt&pageSize=10&apiKey={news_api_key}"
-
-    response = requests.get(url)
-    if response.status_code != 200:
-        st.warning("Failed to fetch news articles. Check API key or rate limit.")
-        return {"Bullish": 0, "Bearish": 0, "Neutral": 0}, []
-
-    articles = response.json().get("articles", [])
-    sia = SentimentIntensityAnalyzer()
-
-    sentiment_scores = {"Bullish": 0, "Bearish": 0, "Neutral": 0}
-    annotated_articles = []
-
-    for article in articles:
-        title = article.get("title", "").strip()
-        description = article.get("description", "").strip()
-        url = article.get("url", "#")
-        combined_text = f"{title}. {description}"
-
-        score = sia.polarity_scores(combined_text)["compound"]
-
-        if score > 0.05:
-            sentiment = "Bullish"
-            reason = "Positive language detected (compound > 0.05)"
-        elif score < -0.05:
-            sentiment = "Bearish"
-            reason = "Negative tone detected (compound < -0.05)"
-        else:
-            sentiment = "Neutral"
-            reason = "Neutral or balanced sentiment"
-
-        sentiment_scores[sentiment] += 1
-        annotated_articles.append({
-            "headline": title,
-            "description": description,
-            "sentiment": sentiment,
-            "reason": reason,
-            "url": url
-        })
-
-    return sentiment_scores, annotated_articles
-
-# --- COMBINE TECHNICAL + NEWS SENTIMENT ---
-def generate_combined_sentiment(df):
-    technical_sentiment, reasons = generate_sentiment(df)
-    news_sentiment, annotated_articles = fetch_news_sentiment()
-
-    combined_sentiment = "Neutral"
-    if news_sentiment["Bullish"] > news_sentiment["Bearish"]:
-        combined_sentiment = "Bullish"
-    elif news_sentiment["Bearish"] > news_sentiment["Bullish"]:
-        combined_sentiment = "Bearish"
-
-    return combined_sentiment, news_sentiment, annotated_articles
-
-# --- TECHNICAL SENTIMENT LOGIC ---
-def generate_sentiment(df):
-    sentiment = "Neutral"
-    bullish_signals = 0
-    bearish_signals = 0
-
-    latest = df.iloc[-1]
+# Trading logic using indicators
+def determine_sentiment(latest):
+    bullish, bearish = 0, 0
     reasons = []
-
     if latest['MACD'] > latest['Signal']:
-        bullish_signals += 1
-        reasons.append("MACD crossover → Bullish")
+        bullish += 1
+        reasons.append("MACD bullish")
     elif latest['MACD'] < latest['Signal']:
-        bearish_signals += 1
-        reasons.append("MACD crossover → Bearish")
-
+        bearish += 1
+        reasons.append("MACD bearish")
     if latest['RSI'] < 30:
-        bullish_signals += 1
-        reasons.append("RSI < 30 → Oversold (Bullish)")
+        bullish += 1
+        reasons.append("RSI oversold")
     elif latest['RSI'] > 70:
-        bearish_signals += 1
-        reasons.append("RSI > 70 → Overbought (Bearish)")
-
+        bearish += 1
+        reasons.append("RSI overbought")
     if latest['Stoch_%K'] > latest['Stoch_%D'] and latest['Stoch_%K'] < 20:
-        bullish_signals += 1
-        reasons.append("Stochastic crossover < 20 → Bullish")
+        bullish += 1
+        reasons.append("Stoch bullish")
     elif latest['Stoch_%K'] < latest['Stoch_%D'] and latest['Stoch_%K'] > 80:
-        bearish_signals += 1
-        reasons.append("Stochastic crossover > 80 → Bearish")
-
+        bearish += 1
+        reasons.append("Stoch bearish")
     if latest['close'] < latest['bb_low']:
-        bullish_signals += 1
-        reasons.append("Price below lower BB → Bullish")
+        bullish += 1
+        reasons.append("Price below BB low")
     elif latest['close'] > latest['bb_high']:
-        bearish_signals += 1
-        reasons.append("Price above upper BB → Bearish")
+        bearish += 1
+        reasons.append("Price above BB high")
+    if bullish > bearish:
+        return "Bullish", reasons
+    elif bearish > bullish:
+        return "Bearish", reasons
+    else:
+        return "Neutral", reasons
 
-    if bullish_signals > bearish_signals:
-        sentiment = "Bullish"
-    elif bearish_signals > bullish_signals:
-        sentiment = "Bearish"
+# Initialize session state
+if "position" not in st.session_state:
+    st.session_state.position = "None"
+    st.session_state.balance = 1000.0
+    st.session_state.holdings = 0.0
+    st.session_state.trade_log = []
+    st.session_state.net_worth_log = []
 
-    return sentiment, reasons
+# Main sandbox workflow
+if USE_SANDBOX:
+    df = generate_synthetic_ohlcv()
+    df = add_indicators(df)
+    latest = df.iloc[-1]
+    sentiment, reasons = determine_sentiment(latest)
+    price = latest['close']
 
-# --- UI ---
-timeframe = st.sidebar.selectbox("Select timeframe:", options=["1d", "1w"], index=0)
-interval_map = {"1d": "daily", "1w": "daily"}
-limit = 90 if timeframe == "1d" else 30
+    now = datetime.datetime.now()
+    if sentiment == "Bullish" and st.session_state.position == "None":
+        st.session_state.position = "Long"
+        st.session_state.holdings = st.session_state.balance / price
+        st.session_state.balance = 0
+        st.session_state.trade_log.append({"time": now, "action": "BUY", "price": price, "holdings": st.session_state.holdings})
+    elif sentiment == "Bearish" and st.session_state.position == "Long":
+        st.session_state.balance = st.session_state.holdings * price
+        st.session_state.holdings = 0
+        st.session_state.position = "None"
+        st.session_state.trade_log.append({"time": now, "action": "SELL", "price": price, "balance": st.session_state.balance})
+    net_worth = st.session_state.balance + st.session_state.holdings * price
+    st.session_state.net_worth_log.append({"time": now, "net_worth": net_worth})
 
-df = fetch_ohlcv(interval=interval_map[timeframe], outputsize=limit)
-df = add_indicators(df)
+    # Display outputs
+    st.write(f"**Current Price:** ${price:.2f}")
+    st.write(f"**Sentiment:** {sentiment}")
+    st.write(f"**Reasons:** {', '.join(reasons)}")
+    st.write(f"**Position:** {st.session_state.position}")
+    st.write(f"**Net Worth:** ${net_worth:.2f}")
 
-st.write("📊 **Preview of market data**")
-st.dataframe(df.tail(5))
+    if st.session_state.trade_log:
+        st.subheader("🧾 Trade Log")
+        st.dataframe(pd.DataFrame(st.session_state.trade_log))
 
-if df.empty:
-    st.warning(f"No data to display for {timeframe}. Try another interval.")
-    st.stop()
+    if st.session_state.net_worth_log:
+        st.subheader("📈 Net Worth Over Time")
+        df_net = pd.DataFrame(st.session_state.net_worth_log).set_index("time")
+        st.line_chart(df_net)
 
-# --- TREND SUMMARY ---
-st.subheader("📈 Price Trend Summary")
-combined_sentiment, news_sentiment, annotated_articles = generate_combined_sentiment(df)
-
-st.success(f"📝 Combined Market Sentiment: **{combined_sentiment}**")
-st.markdown(f"""
-**News Sentiment Breakdown:**  
-🟢 Bullish: `{news_sentiment['Bullish']}`  
-🔴 Bearish: `{news_sentiment['Bearish']}`  
-⚪ Neutral: `{news_sentiment['Neutral']}`
-""")
-
-# --- CANDLESTICK CHART ---
-st.subheader("📉 Candlestick Chart")
-try:
-    mpf_df = df[['open', 'high', 'low', 'close', 'volume']]
-    mpf.plot(mpf_df, type='candle', volume=True, style='yahoo', title=f'SOL/USDT - {timeframe.upper()}', mav=(9, 21), show_nontrading=False)
-    st.pyplot(plt.gcf())
-except Exception as e:
-    st.error(f"Chart rendering error: {e}")
-
-# --- SENTIMENT HEADLINES WITH EXPLANATIONS ---
-st.subheader("📰 Relevant News Headlines and Sentiment")
-
-if not annotated_articles:
-    st.info("No news articles could be analyzed.")
-else:
-    for article in annotated_articles:
-        st.markdown(f"**🗞️ [{article['headline']}]({article['url']})**")
-        st.write(f"- **Sentiment:** `{article['sentiment']}`")
-        st.write(f"- **Reason:** _{article['reason']}_")
-        if article['description']:
-            st.write(f"- **Summary:** {article['description']}")
-        st.markdown("---")
-
-# --- SENTIMENT ENGINE EXPLANATION ---
-st.subheader("🧠 Sentiment Analysis Method")
-st.markdown("""
-**Sources of Sentiment:**
-
-- Technical Indicators: RSI, MACD, Stochastic, Bollinger Bands  
-- News Sentiment: Headlines and summaries analyzed using VADER (NLTK)
-""")
+    st.success("✅ Sandbox trading simulation using your real indicators is active without using API credits.")
