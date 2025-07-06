@@ -46,10 +46,10 @@ def load_price_data(start_date, end_date):
 
 # --- Dummy sentiment data ---
 @st.cache_data(show_spinner=False)
-def load_sentiment_data(dates):
+def load_sentiment_data(_dates):
     np.random.seed(42)
-    scores = np.random.uniform(-1, 1, len(dates))
-    return pd.DataFrame({"date": dates, "sentiment": scores}).set_index("date")
+    scores = np.random.uniform(-1, 1, len(_dates))
+    return pd.DataFrame({"date": _dates, "sentiment": scores}).set_index("date")
 
 # --- Backtest logic ---
 def run_backtest(prices, sentiments, capital, threshold):
