@@ -11,7 +11,6 @@ import datetime
 st.set_page_config(layout="wide")
 st.title("🚦 SOL/USDT Advanced Sentiment Engine with Live Graphs, Traffic Light & Advice")
 
-# --- Fetch OHLCV data ---
 @st.cache_data(ttl=3600)
 def fetch_ohlcv():
     url = "https://api.coingecko.com/api/v3/coins/solana/market_chart?vs_currency=usd&days=180&interval=daily"
@@ -28,7 +27,6 @@ def fetch_ohlcv():
     df.dropna(inplace=True)
     return df
 
-# --- Add Indicators ---
 def add_indicators(df):
     macd = MACD(df['close'])
     df['MACD'] = macd.macd()
@@ -43,7 +41,6 @@ def add_indicators(df):
     df.dropna(inplace=True)
     return df
 
-# --- Fetch Fear & Greed Index ---
 def fetch_fear_greed():
     try:
         response = requests.get("https://api.alternative.me/fng/?limit=1")
@@ -59,12 +56,10 @@ def fetch_fear_greed():
     except:
         return "Unavailable", "Neutral"
 
-# --- Traffic Light Helper ---
 def traffic_light(status):
     colors = {"Bullish": "🟢 Bullish", "Bearish": "🔴 Bearish", "Neutral": "🟡 Neutral"}
     return colors.get(status, "🟡 Neutral")
 
-# --- Advice based on combined signals ---
 def generate_advice(sentiments, fear_greed_sentiment):
     counts = pd.Series(sentiments.values()).value_counts()
     decision = counts.idxmax() if not counts.empty else "Neutral"
@@ -75,8 +70,11 @@ def generate_advice(sentiments, fear_greed_sentiment):
     else:
         return "🟡 **Advice: Hold/Wait - Signals are mixed or neutral.**"
 
-# --- Main Workflow ---
 df = fetch_ohlcv()
+if df.empty:
+    st.error("❌ Data could not be loaded. Please check API connectivity or data availability.")
+    st.stop()
+
 df = add_indicators(df)
 fear_greed_value, fear_greed_sentiment = fetch_fear_greed()
 
@@ -84,13 +82,11 @@ st.subheader(f"😨 Fear & Greed Index: {fear_greed_value} → {traffic_light(fe
 
 latest = df.iloc[-1]
 sentiments = {}
-# Classify sentiments
 sentiments['MACD'] = "Bullish" if latest['MACD'] > latest['Signal'] else ("Bearish" if latest['MACD'] < latest['Signal'] else "Neutral")
 sentiments['RSI'] = "Bullish" if latest['RSI'] < 30 else ("Bearish" if latest['RSI'] > 70 else "Neutral")
 sentiments['Stochastic'] = "Bullish" if latest['Stoch_%K'] > latest['Stoch_%D'] and latest['Stoch_%K'] < 20 else ("Bearish" if latest['Stoch_%K'] < latest['Stoch_%D'] and latest['Stoch_%K'] > 80 else "Neutral")
 sentiments['Bollinger'] = "Bullish" if latest['close'] < latest['BB_Low'] else ("Bearish" if latest['close'] > latest['BB_High'] else "Neutral")
 
-# --- Plot Indicators with explanation and traffic light ---
 st.subheader("📈 Live Indicator Graphs")
 
 fig, axs = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
@@ -118,7 +114,6 @@ axs[3].legend()
 plt.tight_layout()
 st.pyplot(fig)
 
-# --- Indicator Explanations ---
 st.markdown("""
 ### 🧠 Indicator Explanations:
 - **Bollinger Bands:** Price near lower band = Bullish, near upper band = Bearish.
@@ -127,7 +122,6 @@ st.markdown("""
 - **Stochastic:** %K > %D below 20 = Bullish, %K < %D above 80 = Bearish.
 """)
 
-# --- Advice Section ---
 st.subheader("📌 Strategic Advice")
 st.markdown(generate_advice(sentiments, fear_greed_sentiment))
 
