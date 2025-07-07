@@ -7,3 +7,7 @@ ta
 mplfinance
 textblob
 pycoingecko
+youtube-transcript-api
+transformers
+torch
+pandas
