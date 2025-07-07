@@ -7,9 +7,6 @@ from ta.trend import MACD
 from ta.volatility import BollingerBands
 import matplotlib.pyplot as plt
 import datetime
-from streamlit_autorefresh import st_autorefresh
-
-st_autorefresh(interval=60000, key="refresh")
 
 st.title("🚦 SOL/USDT Sentiment Engine Paper Trader with Live Strategy")
 
