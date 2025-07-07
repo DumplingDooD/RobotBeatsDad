@@ -6,9 +6,9 @@ from googleapiclient.discovery import build
 from datetime import datetime
 
 st.set_page_config(page_title="YouTube Sentiment Trader", layout="wide")
-st.title("🤖 Automated YouTube Sentiment Trader with Visual Dashboard")
+st.title("🤖 Automated YouTube Sentiment Trader with Visual Analysis")
 
-# --- Preset YouTubers ---
+# --- Fixed YouTuber Channel IDs ---
 YOUTUBERS = {
     "UClgJyzwGs-GyaNxUHcLZrkg": "InvestAnswers",
     "UCqK_GSMbpiV8spgD3ZGloSw": "Coin Bureau",
@@ -20,10 +20,9 @@ YOUTUBERS = {
     "UCK-zlnUfoDHzUwXcbddtnkg": "ArkInvest"
 }
 
-# --- Your API Key ---
-api_key = "AIzaSyDSXkpQk9Vo83UtBHmEUf2oqRmVYYelkHE"
+# --- API Key (insert your API key here or use Streamlit secret management) ---
+api_key = st.text_input("Enter your YouTube Data API Key", type="password")
 
-# --- Fetch & Analyze ---
 @st.cache_data(ttl=86400)
 def fetch_and_analyze(api_key):
     youtube = build('youtube', 'v3', developerKey=api_key)
@@ -58,7 +57,7 @@ def fetch_and_analyze(api_key):
                     "Summary": summary,
                     "Sentiment": sentiment_icon
                 })
-            except Exception as e:
+            except Exception:
                 results.append({
                     "Name": name,
                     "Video Title": video_title,
@@ -69,32 +68,32 @@ def fetch_and_analyze(api_key):
                 })
     return pd.DataFrame(results)
 
-# --- Run Analysis ---
-with st.spinner("🚀 Fetching latest YouTuber sentiments, transcribing, and analyzing..."):
-    try:
-        df = fetch_and_analyze(api_key)
-        if df.empty:
-            st.warning("No videos found or unable to fetch data. Please check your API key or quotas.")
-        else:
-            st.subheader("🎥 Latest YouTuber Sentiment Dashboard")
-            for _, row in df.iterrows():
-                with st.container():
-                    st.markdown(f"### [{row['Name']}]({row['URL']})")
-                    st.markdown(f"**Video:** {row['Video Title']}  |  **Published:** {row['Published']}")
-                    st.markdown(f"**Sentiment:** {row['Sentiment']}")
-                    st.markdown(f"**Summary:** {row['Summary']}")
-                    st.markdown("---")
+if api_key:
+    with st.spinner("🚀 Fetching latest YouTuber sentiments, transcribing, and analyzing..."):
+        try:
+            df = fetch_and_analyze(api_key)
+            if df.empty:
+                st.warning("No videos found or unable to fetch data. Please check your API key or quotas.")
+            else:
+                st.subheader("🎥 Latest YouTuber Sentiment Dashboard")
+                for _, row in df.iterrows():
+                    with st.container():
+                        st.markdown(f"### [{row['Name']}]({row['URL']})")
+                        st.markdown(f"**Video:** {row['Video Title']}  |  **Published:** {row['Published']}")
+                        st.markdown(f"**Sentiment:** {row['Sentiment']}")
+                        st.markdown(f"**Summary:** {row['Summary']}")
+                        st.markdown("---")
 
-            sentiment_summary = df['Sentiment'].value_counts().to_dict()
-            st.subheader("📊 Sentiment Summary")
-            st.json(sentiment_summary)
+                sentiment_summary = df['Sentiment'].value_counts().to_dict()
+                st.subheader("📊 Sentiment Summary Across Channels")
+                st.json(sentiment_summary)
 
-            st.info("ℹ️ Sentiment engine ingestion is currently disabled to prevent connection errors. Results are ready for ingestion when your FastAPI engine is live.")
-
-            st.success("✅ Analysis complete and cached for 24 hours.")
-    except Exception as e:
-        st.error(f"❌ Error: {e}")
+                st.success("✅ Analysis complete and cached for 24 hours.")
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+else:
+    st.info("ℹ️ Please enter your YouTube Data API key above to begin analysis.")
 
 st.markdown("""
-This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries** for informed daily decisions.
+This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries** for your informed daily trading and macro sentiment monitoring. **No ingestion to the sentiment engine is currently active.**
 """)
