@@ -3,12 +3,11 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from transformers import pipeline
 import pandas as pd
 from googleapiclient.discovery import build
-from datetime import datetime
 
 st.set_page_config(page_title="YouTube Sentiment Trader", layout="wide")
-st.title("🤖 Automated YouTube Sentiment Trader with Visual Engine Feed")
+st.title("🤖 Automated YouTube Sentiment Trader")
 
-# --- Fixed 8 YouTuber Channel IDs with display names ---
+# --- Fixed YouTuber Channel IDs with display names ---
 YOUTUBERS = {
     "UClgJyzwGs-GyaNxUHcLZrkg": "InvestAnswers",
     "UCqK_GSMbpiV8spgD3ZGloSw": "Coin Bureau",
@@ -83,11 +82,12 @@ if api_key:
                         st.markdown(f"**Sentiment:** {row['Sentiment']}")
                         st.markdown(f"**Summary:** {row['Summary']}")
                         st.markdown("---")
-
                 st.success("✅ Analysis complete and cached for 24 hours.")
         except Exception as e:
             st.error(f"❌ Error: {e}")
 else:
     st.info("🔑 Please enter your YouTube Data API key above to begin analysis.")
 
-st.markdown("This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries for informed daily decisions.**")
+st.markdown("""
+This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries** for informed daily decisions.
+""")
