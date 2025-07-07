@@ -1,5 +1,3 @@
-# Realtime Sentiment Trader: YouTube Sentiment Extractor (upload-ready)
-
 import streamlit as st
 from youtube_transcript_api import YouTubeTranscriptApi
 from transformers import pipeline
@@ -21,17 +19,17 @@ if st.button("🪄 Transcribe and Extract Sentiment") and video_id:
         # Load sentiment pipeline
         sentiment_pipeline = pipeline("sentiment-analysis")
 
-        # Split transcript into chunks
+        # Split transcript into chunks for processing
         chunks = [transcript_text[i:i+512] for i in range(0, len(transcript_text), 512)]
 
         results = []
         for chunk in chunks:
             sentiment = sentiment_pipeline(chunk)[0]
-            results.append({"text": chunk[:50] + "...", "label": sentiment['label'], "score": sentiment['score']})
+            results.append({"Text Snippet": chunk[:50] + "...", "Sentiment": sentiment['label'], "Score": sentiment['score']})
 
         results_df = pd.DataFrame(results)
         st.subheader("📄 Sentiment on Transcript Chunks")
-        st.dataframe(results_df)
+        st.dataframe(results_df, use_container_width=True)
 
         # Entity extraction pipeline
         from transformers import pipeline as ner_pipeline
@@ -43,18 +41,19 @@ if st.button("🪄 Transcribe and Extract Sentiment") and video_id:
         for ent in entities:
             entity_text = ent['word'].upper()
             if any(te in entity_text for te in tracked_entities):
-                entity_records.append({"entity": ent['word'], "score": ent['score'], "label": ent['entity_group']})
+                entity_records.append({"Entity": ent['word'], "Score": ent['score'], "Label": ent['entity_group']})
 
         if entity_records:
             entity_df = pd.DataFrame(entity_records)
             st.subheader("🔍 Extracted Relevant Entities")
-            st.dataframe(entity_df)
+            st.dataframe(entity_df, use_container_width=True)
         else:
             st.info("No tracked entities found in this video.")
 
-        st.success("✅ Processing complete. Use these signals in your trading strategy.")
+        st.success("✅ Processing complete. You can now use these signals in your trading system.")
 
     except Exception as e:
-        st.error(f"❌ Error: {e}")
+        st.error(f"❌ Error fetching transcript or processing: {e}")
 
-st.markdown("This tool transcribes YouTube videos, extracts relevant entities, and generates sentiment signals for your trading engine.")
+st.markdown("This tool will **transcribe YouTube videos, extract relevant entities, and generate sentiment signals** for your automated trading engine.")
+
