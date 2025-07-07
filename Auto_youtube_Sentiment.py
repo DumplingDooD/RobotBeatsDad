@@ -21,7 +21,8 @@ YOUTUBERS = {
     "UCK-zlnUfoDHzUwXcbddtnkg": "ArkInvest"
 }
 
-api_key = st.text_input("Enter your YouTube Data API Key")
+# Automatically insert your API key for operational deployment
+api_key = "AIzaSyDSXkpQk9Vo83UtBHmEUf2oqRmVYYelkHE"
 engine_endpoint = st.text_input("Main Sentiment Engine Endpoint URL", "http://localhost:8000/ingest_youtube_sentiment")
 
 @st.cache_data(ttl=86400)
@@ -69,7 +70,7 @@ def fetch_and_analyze(api_key):
                 })
     return pd.DataFrame(results)
 
-if st.button("🚀 Run and Feed to Sentiment Engine") and api_key:
+if st.button("🚀 Run and Feed to Sentiment Engine"):
     try:
         df = fetch_and_analyze(api_key)
         st.subheader("🎥 Latest YouTuber Sentiment Dashboard")
@@ -81,7 +82,6 @@ if st.button("🚀 Run and Feed to Sentiment Engine") and api_key:
                 st.markdown(f"**Summary:** {row['Summary']}")
                 st.markdown("---")
 
-        # Aggregate sentiment summary for engine feed
         sentiment_summary = df['Sentiment'].value_counts().to_dict()
         payload = {
             "date": str(datetime.now().date()),
