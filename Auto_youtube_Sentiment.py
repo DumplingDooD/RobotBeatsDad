@@ -4,11 +4,11 @@ from transformers import pipeline
 import pandas as pd
 from googleapiclient.discovery import build
 from datetime import datetime
-import requests
 
 st.set_page_config(page_title="YouTube Sentiment Trader", layout="wide")
-st.title("🤖 Automated YouTube Sentiment Trader with Visual Engine Feed")
+st.title("🤖 Automated YouTube Sentiment Trader with Visual Dashboard")
 
+# --- Preset YouTubers ---
 YOUTUBERS = {
     "UClgJyzwGs-GyaNxUHcLZrkg": "InvestAnswers",
     "UCqK_GSMbpiV8spgD3ZGloSw": "Coin Bureau",
@@ -20,9 +20,10 @@ YOUTUBERS = {
     "UCK-zlnUfoDHzUwXcbddtnkg": "ArkInvest"
 }
 
+# --- Your API Key ---
 api_key = "AIzaSyDSXkpQk9Vo83UtBHmEUf2oqRmVYYelkHE"
-engine_endpoint = "http://localhost:8000/ingest_youtube_sentiment"
 
+# --- Fetch & Analyze ---
 @st.cache_data(ttl=86400)
 def fetch_and_analyze(api_key):
     youtube = build('youtube', 'v3', developerKey=api_key)
@@ -68,7 +69,8 @@ def fetch_and_analyze(api_key):
                 })
     return pd.DataFrame(results)
 
-with st.spinner("🚀 Fetching latest YouTuber sentiments, transcribing, analyzing, and feeding to your engine..."):
+# --- Run Analysis ---
+with st.spinner("🚀 Fetching latest YouTuber sentiments, transcribing, and analyzing..."):
     try:
         df = fetch_and_analyze(api_key)
         if df.empty:
@@ -82,24 +84,10 @@ with st.spinner("🚀 Fetching latest YouTuber sentiments, transcribing, analyzi
                     st.markdown(f"**Sentiment:** {row['Sentiment']}")
                     st.markdown(f"**Summary:** {row['Summary']}")
                     st.markdown("---")
-
-            sentiment_summary = df['Sentiment'].value_counts().to_dict()
-            payload = {
-                "date": str(datetime.now().date()),
-                "sentiment_summary": sentiment_summary,
-                "details": df.to_dict(orient="records")
-            }
-            try:
-                response = requests.post(engine_endpoint, json=payload)
-                if response.status_code == 200:
-                    st.success("✅ Sentiment data successfully fed to your trading sentiment engine.")
-                else:
-                    st.warning(f"⚠️ Engine response: {response.status_code} - {response.text}")
-            except Exception as e:
-                st.error(f"❌ Engine connection failed: {e}")
-
             st.success("✅ Analysis complete and cached for 24 hours.")
     except Exception as e:
         st.error(f"❌ Error: {e}")
 
-st.markdown("This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries**, feeding them directly into your trading sentiment engine for informed daily decisions.")
+st.markdown("""
+This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries** for informed daily decisions. 🚀
+""")
