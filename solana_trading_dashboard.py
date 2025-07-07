@@ -15,8 +15,15 @@ st.title("🚦 SOL/USDT Advanced Sentiment Engine with Live Graphs, Traffic Ligh
 def fetch_ohlcv():
     url = "https://api.coingecko.com/api/v3/coins/solana/market_chart?vs_currency=usd&days=180&interval=daily"
     response = requests.get(url)
-    prices = response.json().get("prices", [])
+    if response.status_code != 200:
+        st.error(f"CoinGecko API error: {response.status_code} {response.text}")
+        st.stop()
+    data = response.json()
+    prices = data.get("prices", [])
     df = pd.DataFrame(prices, columns=["timestamp", "close"])
+    if df.empty:
+        st.error("CoinGecko returned no price data. DataFrame is empty.")
+        st.stop()
     df["datetime"] = pd.to_datetime(df["timestamp"], unit="ms")
     df.set_index("datetime", inplace=True)
     df["close"] = df["close"].astype(float)
