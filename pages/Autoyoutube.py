@@ -23,7 +23,7 @@ PRESET_CHANNEL_IDS = [
 
 target_entities = st.text_area("Entities to Track (comma separated)", "SOLANA,ETH,BITCOIN,BUY,SELL,BULLISH,BEARISH")
 api_key = st.text_input("Enter your YouTube Data API Key")
-engine_endpoint = st.text_input("Main Sentiment Engine Endpoint URL", "http://localhost:8000/ingest_youtube_sentiment")
+
 
 @st.cache_data(ttl=86400)
 def fetch_and_analyze(api_key, channel_ids, target_entities):
