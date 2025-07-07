@@ -6,9 +6,9 @@ from googleapiclient.discovery import build
 from datetime import datetime
 
 st.set_page_config(page_title="YouTube Sentiment Trader", layout="wide")
-st.title("🤖 Automated YouTube Sentiment Trader with Visual Analysis")
+st.title("🤖 Automated YouTube Sentiment Trader with Visual Engine Feed")
 
-# --- Fixed YouTuber Channel IDs ---
+# --- Fixed 8 YouTuber Channel IDs with display names ---
 YOUTUBERS = {
     "UClgJyzwGs-GyaNxUHcLZrkg": "InvestAnswers",
     "UCqK_GSMbpiV8spgD3ZGloSw": "Coin Bureau",
@@ -20,7 +20,7 @@ YOUTUBERS = {
     "UCK-zlnUfoDHzUwXcbddtnkg": "ArkInvest"
 }
 
-# --- API Key (insert your API key here or use Streamlit secret management) ---
+# --- User YouTube API Key input ---
 api_key = st.text_input("Enter your YouTube Data API Key", type="password")
 
 @st.cache_data(ttl=86400)
@@ -84,16 +84,10 @@ if api_key:
                         st.markdown(f"**Summary:** {row['Summary']}")
                         st.markdown("---")
 
-                sentiment_summary = df['Sentiment'].value_counts().to_dict()
-                st.subheader("📊 Sentiment Summary Across Channels")
-                st.json(sentiment_summary)
-
                 st.success("✅ Analysis complete and cached for 24 hours.")
         except Exception as e:
             st.error(f"❌ Error: {e}")
 else:
-    st.info("ℹ️ Please enter your YouTube Data API key above to begin analysis.")
+    st.info("🔑 Please enter your YouTube Data API key above to begin analysis.")
 
-st.markdown("""
-This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries** for your informed daily trading and macro sentiment monitoring. **No ingestion to the sentiment engine is currently active.**
-""")
+st.markdown("This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries for informed daily decisions.**")
