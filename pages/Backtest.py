@@ -114,3 +114,4 @@ if st.button("🚀 Run Backtest"):
 
     st.subheader("📊 Final Portfolio Value")
     st.write(f"${perf_df['portfolio'].iloc[-1]:,.2f}")
+    
