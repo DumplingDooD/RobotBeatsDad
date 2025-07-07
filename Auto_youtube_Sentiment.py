@@ -9,7 +9,6 @@ import requests
 st.set_page_config(page_title="YouTube Sentiment Trader", layout="wide")
 st.title("🤖 Automated YouTube Sentiment Trader with Visual Engine Feed")
 
-# --- Fixed 8 YouTuber Channel IDs with display names ---
 YOUTUBERS = {
     "UClgJyzwGs-GyaNxUHcLZrkg": "InvestAnswers",
     "UCqK_GSMbpiV8spgD3ZGloSw": "Coin Bureau",
@@ -21,9 +20,8 @@ YOUTUBERS = {
     "UCK-zlnUfoDHzUwXcbddtnkg": "ArkInvest"
 }
 
-# Automatically insert your API key for operational deployment
 api_key = "AIzaSyDSXkpQk9Vo83UtBHmEUf2oqRmVYYelkHE"
-engine_endpoint = st.text_input("Main Sentiment Engine Endpoint URL", "http://localhost:8000/ingest_youtube_sentiment")
+engine_endpoint = "http://localhost:8000/ingest_youtube_sentiment"
 
 @st.cache_data(ttl=86400)
 def fetch_and_analyze(api_key):
@@ -34,7 +32,7 @@ def fetch_and_analyze(api_key):
     for channel_id, name in YOUTUBERS.items():
         request = youtube.search().list(part="snippet", channelId=channel_id, order="date", maxResults=1)
         response = request.execute()
-        for item in response['items']:
+        for item in response.get('items', []):
             video_id = item['id']['videoId']
             video_title = item['snippet']['title']
             publish_time = item['snippet']['publishedAt'][:10]
@@ -70,34 +68,37 @@ def fetch_and_analyze(api_key):
                 })
     return pd.DataFrame(results)
 
-if st.button("🚀 Run and Feed to Sentiment Engine"):
+with st.spinner("🚀 Fetching latest YouTuber sentiments, transcribing, analyzing, and feeding to your engine..."):
     try:
         df = fetch_and_analyze(api_key)
-        st.subheader("🎥 Latest YouTuber Sentiment Dashboard")
-        for _, row in df.iterrows():
-            with st.container():
-                st.markdown(f"### [{row['Name']}]({row['URL']})")
-                st.markdown(f"**Video:** {row['Video Title']}  |  **Published:** {row['Published']}")
-                st.markdown(f"**Sentiment:** {row['Sentiment']}")
-                st.markdown(f"**Summary:** {row['Summary']}")
-                st.markdown("---")
+        if df.empty:
+            st.warning("No videos found or unable to fetch data. Please check your API key or quotas.")
+        else:
+            st.subheader("🎥 Latest YouTuber Sentiment Dashboard")
+            for _, row in df.iterrows():
+                with st.container():
+                    st.markdown(f"### [{row['Name']}]({row['URL']})")
+                    st.markdown(f"**Video:** {row['Video Title']}  |  **Published:** {row['Published']}")
+                    st.markdown(f"**Sentiment:** {row['Sentiment']}")
+                    st.markdown(f"**Summary:** {row['Summary']}")
+                    st.markdown("---")
 
-        sentiment_summary = df['Sentiment'].value_counts().to_dict()
-        payload = {
-            "date": str(datetime.now().date()),
-            "sentiment_summary": sentiment_summary,
-            "details": df.to_dict(orient="records")
-        }
-        try:
-            response = requests.post(engine_endpoint, json=payload)
-            if response.status_code == 200:
-                st.success("✅ Sentiment data successfully fed to your trading sentiment engine.")
-            else:
-                st.warning(f"⚠️ Engine response: {response.status_code} - {response.text}")
-        except Exception as e:
-            st.error(f"❌ Engine connection failed: {e}")
+            sentiment_summary = df['Sentiment'].value_counts().to_dict()
+            payload = {
+                "date": str(datetime.now().date()),
+                "sentiment_summary": sentiment_summary,
+                "details": df.to_dict(orient="records")
+            }
+            try:
+                response = requests.post(engine_endpoint, json=payload)
+                if response.status_code == 200:
+                    st.success("✅ Sentiment data successfully fed to your trading sentiment engine.")
+                else:
+                    st.warning(f"⚠️ Engine response: {response.status_code} - {response.text}")
+            except Exception as e:
+                st.error(f"❌ Engine connection failed: {e}")
 
-        st.success("✅ Analysis complete and cached for 24 hours.")
+            st.success("✅ Analysis complete and cached for 24 hours.")
     except Exception as e:
         st.error(f"❌ Error: {e}")
 
