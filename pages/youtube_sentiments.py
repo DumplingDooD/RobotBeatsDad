@@ -1,8 +1,11 @@
+# Realtime Sentiment Trader: YouTube Sentiment Extractor (upload-ready)
+
 import streamlit as st
 from youtube_transcript_api import YouTubeTranscriptApi
 from transformers import pipeline
 import pandas as pd
 
+st.set_page_config(page_title="YouTube Sentiment Extractor", layout="wide")
 st.title("🎥 YouTube Sentiment Extractor for Trading Signals")
 
 # User input
@@ -13,7 +16,7 @@ if st.button("🪄 Transcribe and Extract Sentiment") and video_id:
     try:
         transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
         transcript_text = " ".join([t['text'] for t in transcript_list])
-        st.success("Transcript fetched successfully.")
+        st.success("✅ Transcript fetched successfully.")
 
         # Load sentiment pipeline
         sentiment_pipeline = pipeline("sentiment-analysis")
@@ -30,7 +33,7 @@ if st.button("🪄 Transcribe and Extract Sentiment") and video_id:
         st.subheader("📄 Sentiment on Transcript Chunks")
         st.dataframe(results_df)
 
-        # Entity extraction
+        # Entity extraction pipeline
         from transformers import pipeline as ner_pipeline
         ner = ner_pipeline("ner", grouped_entities=True)
         entities = ner(transcript_text)
@@ -49,9 +52,9 @@ if st.button("🪄 Transcribe and Extract Sentiment") and video_id:
         else:
             st.info("No tracked entities found in this video.")
 
-        st.success("✅ Processing complete. You can use these signals in your sentiment engine.")
+        st.success("✅ Processing complete. Use these signals in your trading strategy.")
 
     except Exception as e:
-        st.error(f"Error fetching transcript or processing: {e}")
+        st.error(f"❌ Error: {e}")
 
-st.markdown("This tool will help you **transcribe YouTube videos, extract relevant entities, and generate sentiment signals** for your automated trading workflows.")
+st.markdown("This tool transcribes YouTube videos, extracts relevant entities, and generates sentiment signals for your trading engine.")
