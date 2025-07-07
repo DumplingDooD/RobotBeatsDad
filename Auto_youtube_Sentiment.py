@@ -89,12 +89,12 @@ with st.spinner("🚀 Fetching latest YouTuber sentiments, transcribing, and ana
             st.subheader("📊 Sentiment Summary")
             st.json(sentiment_summary)
 
-            st.info("ℹ️ Sentiment engine feed is currently disabled. Results ready for ingestion when your engine is live.")
+            st.info("ℹ️ Sentiment engine ingestion is currently disabled to prevent connection errors. Results are ready for ingestion when your FastAPI engine is live.")
 
             st.success("✅ Analysis complete and cached for 24 hours.")
     except Exception as e:
         st.error(f"❌ Error: {e}")
 
 st.markdown("""
-This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries** for informed daily decisions. 🚀
+This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries** for informed daily decisions.
 """)
