@@ -3,12 +3,9 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from transformers import pipeline
 import pandas as pd
 from googleapiclient.discovery import build
-from datetime import datetime
-import requests
-import json
 
 st.set_page_config(page_title="YouTube Sentiment Trader", layout="wide")
-st.title("🤖 Automated YouTube Sentiment Trader with Live Engine Feed")
+st.title("🤖 Automated YouTube Sentiment Trader")
 
 # --- Configurable preset YouTubers ---
 PRESET_CHANNEL_IDS = [
@@ -21,9 +18,12 @@ PRESET_CHANNEL_IDS = [
     "UCXXXXXXX7",
 ]
 
-target_entities = st.text_area("Entities to Track (comma separated)", "SOLANA,ETH,BITCOIN,BUY,SELL,BULLISH,BEARISH")
-api_key = st.text_input("Enter your YouTube Data API Key")
+target_entities = st.text_area(
+    "Entities to Track (comma separated)",
+    "SOLANA,ETH,BITCOIN,BUY,SELL,BULLISH,BEARISH"
+)
 
+api_key = st.text_input("Enter your YouTube Data API Key", type="password")
 
 @st.cache_data(ttl=86400)
 def fetch_and_analyze(api_key, channel_ids, target_entities):
@@ -31,11 +31,11 @@ def fetch_and_analyze(api_key, channel_ids, target_entities):
     sentiment_pipeline = pipeline("sentiment-analysis")
     summary_records = []
     sentiments_summary = []
-    
+
     for channel_id in channel_ids:
         request = youtube.search().list(part="snippet", channelId=channel_id, order="date", maxResults=1)
         response = request.execute()
-        for item in response['items']:
+        for item in response.get('items', []):
             video_id = item['id']['videoId']
             video_title = item['snippet']['title']
             video_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -57,40 +57,33 @@ def fetch_and_analyze(api_key, channel_ids, target_entities):
                     "Summary": summary
                 })
                 sentiments_summary.append(sentiment_result)
-            except Exception as e:
+            except Exception:
                 st.warning(f"Transcript unavailable for {video_title} ({video_url}).")
-    
+
     summary_df = pd.DataFrame(summary_records)
     sentiment_count = pd.Series(sentiments_summary).value_counts().to_dict()
     return summary_df, sentiment_count
 
-if st.button("🚀 Run and Feed to Sentiment Engine") and api_key:
-    try:
-        summary_df, sentiment_count = fetch_and_analyze(api_key, PRESET_CHANNEL_IDS, target_entities)
-
-        st.subheader("📊 Sentiment Table Across YouTubers")
-        st.dataframe(summary_df, use_container_width=True)
-
-        st.subheader("📈 Sentiment Summary")
-        st.write(sentiment_count)
-
-        # Feed to main sentiment engine automatically
-        payload = {
-            "date": str(datetime.now().date()),
-            "sentiment_summary": sentiment_count,
-            "detailed_sentiments": summary_df.to_dict(orient="records")
-        }
+if api_key:
+    with st.spinner("🚀 Fetching latest YouTuber sentiments, transcribing, and analyzing..."):
         try:
-            response = requests.post(engine_endpoint, json=payload)
-            if response.status_code == 200:
-                st.success("✅ Sentiment data successfully fed to your main trading sentiment engine.")
+            summary_df, sentiment_count = fetch_and_analyze(api_key, PRESET_CHANNEL_IDS, target_entities)
+
+            st.subheader("📊 Sentiment Table Across YouTubers")
+            if not summary_df.empty:
+                st.dataframe(summary_df, use_container_width=True)
             else:
-                st.warning(f"⚠️ Engine responded with status code {response.status_code}: {response.text}")
+                st.info("No data retrieved. Check API key or channel IDs.")
+
+            st.subheader("📈 Sentiment Summary")
+            st.write(sentiment_count)
+
+            st.success("✅ Daily analysis complete, cached for 24 hours.")
         except Exception as e:
-            st.error(f"❌ Failed to connect to the sentiment engine: {e}")
+            st.error(f"❌ Error: {e}")
+else:
+    st.info("🔑 Please enter your YouTube Data API key above to begin analysis.")
 
-        st.success("✅ Daily analysis complete, cached for 24 hours.")
-    except Exception as e:
-        st.error(f"❌ Error: {e}")
-
-st.markdown("This page **automatically fetches, transcribes, and analyzes the latest videos from 7 preset YouTubers, aggregates sentiment daily, and feeds the structured results directly into your main trading sentiment engine for live trade decisions.** Replace `PRESET_CHANNEL_IDS` with your YouTuber IDs and set your sentiment engine URL for seamless integration.")
+st.markdown("""
+This page **automatically fetches, transcribes, analyzes, and visually displays the latest videos from your preset YouTubers with traffic light sentiment and super brief summaries for informed daily decisions.**
+""")
