@@ -17,6 +17,7 @@ def_start = today - timedelta(days=180)
 start_date = st.date_input("Start Date", def_start)
 end_date = st.date_input("End Date", today)
 initial_capital = st.number_input("Starting Capital ($)", min_value=100, value=1000, step=100)
+signal_threshold = st.slider("Signal Threshold (signals required to trigger BUY/SELL)", min_value=1, max_value=4, value=2)
 
 # Load SOL price data
 @st.cache_data(show_spinner=False)
@@ -47,7 +48,7 @@ def add_indicators(df):
     df.dropna(inplace=True)
     return df
 
-def generate_signal(row):
+def generate_signal(row, threshold):
     bullish = 0
     bearish = 0
     if row['MACD'] > row['Signal']:
@@ -66,9 +67,9 @@ def generate_signal(row):
         bullish += 1
     elif row['close'] > row['BB_High']:
         bearish += 1
-    if bullish >= 2:
+    if bullish >= threshold:
         return 'Green'
-    elif bearish >= 2:
+    elif bearish >= threshold:
         return 'Red'
     else:
         return 'Yellow'
@@ -77,20 +78,25 @@ def run_backtest(df, capital):
     position = 0
     portfolio_values = []
     trades = []
+    daily_actions = []
     for date, row in df.iterrows():
         price = row['close']
         signal = row['Signal_Color']
+        action = 'HOLD'
         if signal == 'Green' and position == 0:
             position = capital / price
             capital = 0
             trades.append((date, 'BUY', price))
+            action = 'BUY'
         elif signal == 'Red' and position > 0:
             capital = position * price
             position = 0
             trades.append((date, 'SELL', price))
+            action = 'SELL'
         portfolio = capital + position * price
         portfolio_values.append({'date': date, 'portfolio': portfolio})
-    return pd.DataFrame(portfolio_values).set_index('date'), trades
+        daily_actions.append({'date': date, 'action': action, 'price': price, 'signal': signal, 'portfolio': portfolio})
+    return pd.DataFrame(portfolio_values).set_index('date'), trades, pd.DataFrame(daily_actions).set_index('date')
 
 if st.button("🚀 Run Backtest"):
     price_df = load_price_data(start_date, end_date)
@@ -98,12 +104,15 @@ if st.button("🚀 Run Backtest"):
     price_df['high'] = price_df[['open', 'close']].max(axis=1)
     price_df['low'] = price_df[['open', 'close']].min(axis=1)
     price_df = add_indicators(price_df)
-    price_df['Signal_Color'] = price_df.apply(generate_signal, axis=1)
+    price_df['Signal_Color'] = price_df.apply(lambda row: generate_signal(row, signal_threshold), axis=1)
 
-    perf_df, trade_log = run_backtest(price_df, initial_capital)
+    perf_df, trade_log, daily_actions_df = run_backtest(price_df, initial_capital)
 
     st.subheader("📈 Portfolio Value Over Time")
     st.line_chart(perf_df['portfolio'])
+
+    st.subheader("📅 Daily Actions Table")
+    st.dataframe(daily_actions_df.reset_index(), use_container_width=True)
 
     st.subheader("🧾 Trade Log")
     if trade_log:
@@ -114,4 +123,18 @@ if st.button("🚀 Run Backtest"):
 
     st.subheader("📊 Final Portfolio Value")
     st.write(f"${perf_df['portfolio'].iloc[-1]:,.2f}")
-    
+
+    st.subheader("📈 Portfolio with Buy/Sell Markers")
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(perf_df.index, perf_df['portfolio'], label='Portfolio Value', color='blue')
+    for date, action, price in trade_log:
+        color = 'green' if action == 'BUY' else 'red'
+        marker = '^' if action == 'BUY' else 'v'
+        ax.scatter(date, perf_df.loc[date]['portfolio'], color=color, marker=marker, s=100, label=action)
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys())
+    ax.set_title("Portfolio Value with Buy/Sell Markers")
+    ax.set_ylabel("Portfolio ($)")
+    ax.set_xlabel("Date")
+    st.pyplot(fig)
