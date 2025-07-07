@@ -11,3 +11,4 @@ youtube-transcript-api
 transformers
 torch
 pandas
+google-api-python-client
